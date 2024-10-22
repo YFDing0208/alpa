@@ -1,0 +1,289 @@
+2024-10-07 18:22:46,041	INFO worker.py:1601 -- Connecting to existing Ray cluster at address: 114.212.82.188:6379...
+2024-10-07 18:22:46,053	INFO worker.py:1786 -- Connected to Ray cluster.
+INFO:__main__:Training/evaluation parameters TrainingArguments(output_dir='/data/dyf/output/vit-base-patch16-imagenette', overwrite_output_dir=True, do_train=False, do_eval=False, num_micro_batches=2, per_device_train_batch_size=32, per_device_eval_batch_size=32, learning_rate=0.001, weight_decay=0.0, adam_beta1=0.9, adam_beta2=0.999, adam_epsilon=1e-08, adafactor=False, num_train_epochs=1.0, warmup_steps=0, logging_steps=500, save_steps=500, eval_steps=None, seed=42, push_to_hub=False, hub_model_id=None, hub_token=None)
+loading configuration file /data/dyf/model_card/google/vit-base-patch16-224-in21k/config.json
+Model config ViTConfig {
+  "_name_or_path": "/data/dyf/model_card/google/vit-base-patch16-224-in21k",
+  "architectures": [
+    "ViTModel"
+  ],
+  "attention_probs_dropout_prob": 0.0,
+  "encoder_stride": 16,
+  "hidden_act": "gelu",
+  "hidden_dropout_prob": 0.0,
+  "hidden_size": 768,
+  "id2label": {
+    "0": "LABEL_0",
+    "1": "LABEL_1",
+    "2": "LABEL_2",
+    "3": "LABEL_3",
+    "4": "LABEL_4",
+    "5": "LABEL_5",
+    "6": "LABEL_6",
+    "7": "LABEL_7",
+    "8": "LABEL_8",
+    "9": "LABEL_9"
+  },
+  "image_size": 224,
+  "initializer_range": 0.02,
+  "intermediate_size": 3072,
+  "label2id": {
+    "LABEL_0": 0,
+    "LABEL_1": 1,
+    "LABEL_2": 2,
+    "LABEL_3": 3,
+    "LABEL_4": 4,
+    "LABEL_5": 5,
+    "LABEL_6": 6,
+    "LABEL_7": 7,
+    "LABEL_8": 8,
+    "LABEL_9": 9
+  },
+  "layer_norm_eps": 1e-12,
+  "model_type": "vit",
+  "num_attention_heads": 12,
+  "num_channels": 3,
+  "num_hidden_layers": 12,
+  "patch_size": 16,
+  "qkv_bias": true,
+  "transformers_version": "4.32.1"
+}
+
+loading weights file /data/dyf/model_card/google/vit-base-patch16-224-in21k/flax_model.msgpack
+Some weights of the model checkpoint at /data/dyf/model_card/google/vit-base-patch16-224-in21k were not used when initializing FlaxViTForImageClassification: {('vit', 'pooler', 'dense', 'kernel'), ('vit', 'pooler', 'dense', 'bias')}
+- This IS expected if you are initializing FlaxViTForImageClassification from the checkpoint of a model trained on another task or with another architecture (e.g. initializing a BertForSequenceClassification model from a BertForPreTraining model).
+- This IS NOT expected if you are initializing FlaxViTForImageClassification from the checkpoint of a model that you expect to be exactly identical (initializing a BertForSequenceClassification model from a BertForSequenceClassification model).
+Some weights of FlaxViTForImageClassification were not initialized from the model checkpoint at /data/dyf/model_card/google/vit-base-patch16-224-in21k and are newly initialized: {('classifier', 'kernel'), ('classifier', 'bias')}
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+WARNING:__main__:Unable to display metrics through TensorBoard because some package are not installed: No module named 'tensorflow'
+INFO:__main__:***** Running training *****
+INFO:__main__:  Num examples = 9469
+INFO:__main__:  Num Epochs = 1
+INFO:__main__:  Instantaneous batch size per device = 32
+INFO:__main__:  Total train batch size (w. parallel & distributed) = 32
+INFO:__main__:  Total optimization steps = 295
+Initializing ray with address auto
+
+all_host_info: [{'NodeID': 'a64e4dc4ec6ce42810878b8c6988d2f4939f8cb12d1331b781689801', 'Alive': True, 'NodeManagerAddress': '114.212.82.188', 'NodeManagerHostname': 'ubuntu', 'NodeManagerPort': 43583, 'ObjectManagerPort': 43779, 'ObjectStoreSocketName': '/data/dyf/tmp/ray/session_2024-10-06_19-05-15_955466_4094/sockets/plasma_store', 'RayletSocketName': '/data/dyf/tmp/ray/session_2024-10-06_19-05-15_955466_4094/sockets/raylet', 'MetricsExportPort': 61095, 'NodeName': '114.212.82.188', 'RuntimeEnvAgentPort': 59786, 'DeathReason': 0, 'DeathReasonMessage': '', 'alive': True, 'Resources': {'node:__internal_head__': 1.0, 'accelerator_type:G': 1.0, 'node:114.212.82.188': 1.0, 'GPU': 2.0, 'object_store_memory': 38248153497.0, 'memory': 79245691495.0, 'CPU': 40.0}, 'Labels': {'ray.io/node_id': 'a64e4dc4ec6ce42810878b8c6988d2f4939f8cb12d1331b781689801'}}]
+all_host_num_devices: [2]
+Epoch ... (1/1):   0%|          | 0/1 [00:00<?, ?it/s]
+Training...:   0%|          | 0/295 [00:00<?, ?it/s][A
+-*-*-*-*-VirtualPhysicalMesh-*-*-*-*-
+host_ids: [0]
+host_info: [{'NodeID': 'a64e4dc4ec6ce42810878b8c6988d2f4939f8cb12d1331b781689801', 'Alive': True, 'NodeManagerAddress': '114.212.82.188', 'NodeManagerHostname': 'ubuntu', 'NodeManagerPort': 43583, 'ObjectManagerPort': 43779, 'ObjectStoreSocketName': '/data/dyf/tmp/ray/session_2024-10-06_19-05-15_955466_4094/sockets/plasma_store', 'RayletSocketName': '/data/dyf/tmp/ray/session_2024-10-06_19-05-15_955466_4094/sockets/raylet', 'MetricsExportPort': 61095, 'NodeName': '114.212.82.188', 'RuntimeEnvAgentPort': 59786, 'DeathReason': 0, 'DeathReasonMessage': '', 'alive': True, 'Resources': {'node:__internal_head__': 1.0, 'accelerator_type:G': 1.0, 'node:114.212.82.188': 1.0, 'GPU': 2.0, 'object_store_memory': 38248153497.0, 'memory': 79245691495.0, 'CPU': 40.0}, 'Labels': {'ray.io/node_id': 'a64e4dc4ec6ce42810878b8c6988d2f4939f8cb12d1331b781689801'}}]
+num_devices_per_host: 2
+devices: [[0, 1]]
+stage_option.submesh_physical_shape_space :power_of_two
+stage_option.submesh_logical_shape_space: single_node_model_parallel
+stage_option.manually_specified_submeshes: None
+-------------------- Automatic stage clustering --------------------
+submesh_choices: ((1, 1), (1, 2))
+- Profiling for submesh 1 (1, 2):
+- Generate all stage infos (Jaxpr -> HLO)
+num_layers: 2
+
+
+  0%|          | 0/2 [00:00<?, ?it/s][A[A
+
+
+  0%|          | 0/2 [00:00<?, ?it/s][A[A[A
+
+
+100%|██████████| 2/2 [00:03<00:00,  1.86s/it][A[A[A
+
+
+                                             [A[A[A
+
+ 50%|█████     | 1/2 [00:03<00:03,  3.73s/it][A[A
+
+
+  0%|          | 0/1 [00:00<?, ?it/s][A[A[A
+
+
+                                     [A[A[A100%|██████████| 2/2 [00:03<00:00,  1.87s/it]
+profile_results before check: {}
+stages to profile:
+stage_idx: (0, 1, 1, 0)
+stage_idx: (0, 1, 1, 1)
+stage_idx: (0, 1, 1, 2)
+sliced_virtual_meshes:
+sliced_virtual_mesh 0: host_ids->[0]                     num_devices_per_host->2  devices->[range(0, 2)]
+- Compile all stages
+
+
+  0%|          | 0/3 [00:00<?, ?it/s][A[A
+
+ 33%|███▎      | 1/3 [00:08<00:17,  8.69s/it][A[A
+
+ 67%|██████▋   | 2/3 [00:14<00:06,  6.90s/it][A[A
+
+100%|██████████| 3/3 [00:21<00:00,  7.13s/it][A[A100%|██████████| 3/3 [00:21<00:00,  7.25s/it]
+- Profile all stages
+
+
+  0%|          | 0/6 [00:00<?, ?it/s][A[A  0%|          | 0/6 [00:07<?, ?it/s]
+Epoch ... (1/1):   0%|          | 0/1 [00:41<?, ?it/s][36m(ProfileWorker pid=15225)[0m Unhandled error (suppress with 'RAY_IGNORE_UNHANDLED_ERRORS=1'): [36mray::MeshHostWorker.put_executable()[39m (pid=15384, ip=114.212.82.188, actor_id=ae7dd32edcda732b3c2f570806000000, repr=<alpa.device_mesh.MeshHostWorker object at 0x7f8e289f5af0>)
+[36m(ProfileWorker pid=15225)[0m   File "/data/dyf/alpa/alpa/device_mesh.py", line 275, in put_executable
+
+[36m(ProfileWorker pid=15225)[0m     self.executables[uuid] = executable_class(self, uuid, *args)
+[36m(ProfileWorker pid=15225)[0m   File "/data/dyf/alpa/alpa/mesh_executable.py", line 995, in __init__
+[36m(ProfileWorker pid=15225)[0m     super().__init__(worker, uuid, hlo, stage_plan, donated_invars)
+[36m(ProfileWorker pid=15225)[0m   File "/data/dyf/alpa/alpa/mesh_executable.py", line 437, in __init__
+[36m(ProfileWorker pid=15225)[0m     self.compiled = run_backend_compilation(worker.backend, hlo, stage_plan,
+[36m(ProfileWorker pid=15225)[0m   File "/data/dyf/alpa/alpa/shard_parallel/auto_sharding.py", line 445, in run_backend_compilation
+[36m(ProfileWorker pid=15225)[0m     compiled = backend.compile(hlo.get_computation(), compile_options)
+[36m(ProfileWorker pid=15225)[0m jaxlib.xla_extension.XlaRuntimeError: UNKNOWN: Failed to determine best cudnn convolution algorithm for:
+[36m(ProfileWorker pid=15225)[0m %cudnn-conv-bias-activation.2 = (f32[16,14,14,768]{2,1,3,0}, u8[0]{0}) custom-call(f32[16,3,224,224]{3,2,1,0} %param.1, f32[16,16,3,768]{1,0,2,3} %copy, f32[768]{0} %param.3), window={size=16x16 stride=16x16}, dim_labels=bf01_01io->b01f, custom_call_target="__cudnn$convBiasActivationForward", metadata={op_name="parallelize(stage_0_1)/jit(main)/jit(stage_0_1_acc_grad_0)/jit(stage_0_1_acc_grad_00)/jvp(FlaxViTForImageClassificationModule)/vit/embeddings/patch_embeddings/projection/conv_general_dilated[window_strides=(16, 16) padding=((0, 0), (0, 0)) lhs_dilation=(1, 1) rhs_dilation=(1, 1) dimension_numbers=ConvDimensionNumbers(lhs_spec=(0, 3, 1, 2), rhs_spec=(3, 2, 0, 1), out_spec=(0, 3, 1, 2)) feature_group_count=1 batch_group_count=1 lhs_shape=(32, 224, 224, 3) rhs_shape=(16, 16, 3, 768) precision=None preferred_element_type=None]" source_file="/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/flax/linen/linear.py" source_line=435}, backend_config="{\"conv_result_scale\":1,\"activation_mode\":\"0\",\"side_input_scale\":0}"
+[36m(ProfileWorker pid=15225)[0m 
+[36m(ProfileWorker pid=15225)[0m Original error: INTERNAL: All algorithms tried for %cudnn-conv-bias-activation.2 = (f32[16,14,14,768]{2,1,3,0}, u8[0]{0}) custom-call(f32[16,3,224,224]{3,2,1,0} %param.1, f32[16,16,3,768]{1,0,2,3} %copy, f32[768]{0} %param.3), window={size=16x16 stride=16x16}, dim_labels=bf01_01io->b01f, custom_call_target="__cudnn$convBiasActivationForward", metadata={op_name="parallelize(stage_0_1)/jit(main)/jit(stage_0_1_acc_grad_0)/jit(stage_0_1_acc_grad_00)/jvp(FlaxViTForImageClassificationModule)/vit/embeddings/patch_embeddings/projection/conv_general_dilated[window_strides=(16, 16) padding=((0, 0), (0, 0)) lhs_dilation=(1, 1) rhs_dilation=(1, 1) dimension_numbers=ConvDimensionNumbers(lhs_spec=(0, 3, 1, 2), rhs_spec=(3, 2, 0, 1), out_spec=(0, 3, 1, 2)) feature_group_count=1 batch_group_count=1 lhs_shape=(32, 224, 224, 3) rhs_shape=(16, 16, 3, 768) precision=None preferred_element_type=None]" source_file="/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/flax/linen/linear.py" source_line=435}, backend_config="{\"conv_result_scale\":1,\"activation_mode\":\"0\",\"side_input_scale\":0}" failed. Falling back to default algorithm.  Per-algorithm errors:
+[36m(ProfileWorker pid=15225)[0m   Profiling failure on cuDNN engine 1#TC: UNKNOWN: CUDNN_STATUS_EXECUTION_FAILED
+[36m(ProfileWorker pid=15225)[0m in external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc(5150): 'status'
+[36m(ProfileWorker pid=15225)[0m   Profiling failure on cuDNN engine 1: UNKNOWN: CUDNN_STATUS_EXECUTION_FAILED
+[36m(ProfileWorker pid=15225)[0m in external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc(5150): 'status'
+[36m(ProfileWorker pid=15225)[0m   Profiling failure on cuDNN engine 1#TC: UNKNOWN: CUDNN_STATUS_EXECUTION_FAILED
+[36m(ProfileWorker pid=15225)[0m in external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc(5150): 'status'
+[36m(ProfileWorker pid=15225)[0m   Profiling failure on cuDNN engine 1: UNKNOWN: CUDNN_STATUS_EXECUTION_FAILED
+[36m(ProfileWorker pid=15225)[0m in external/org_tensorflow/tensorflow/compiler/xla/stream_executor/cuda/cuda_dnn.cc(5150): 'status'
+[36m(ProfileWorker pid=15225)[0m 
+[36m(ProfileWorker pid=15225)[0m To ignore this failure and try to use a fallback algorithm (which may have suboptimal performance), use XLA_FLAGS=--xla_gpu_strict_conv_algorithm_picker=false.  Please also file a bug for the root cause of failing autotuning.
+Traceback (most recent call last):
+  File "/data/dyf/alpa/examples/ViT/run_image_classification.py", line 580, in <module>
+    main()
+[36m(MeshHostWorker pid=15384)[0m 2024-10-07 18:27:54.684257: W external/org_tensorflow/tensorflow/compiler/xla/service/gpu/gpu_conv_algorithm_picker.cc:729] None of the algorithms provided by cuDNN heuristics worked; trying fallback algorithms.  Conv: (f32[16,14,14,768]{2,1,3,0}, u8[0]{0}) custom-call(f32[16,3,224,224]{3,2,1,0}, f32[16,16,3,768]{1,0,2,3}, f32[768]{0}), window={size=16x16 stride=16x16}, dim_labels=bf01_01io->b01f, custom_call_target="__cudnn$convBiasActivationForward", backend_config="{\"conv_result_scale\":1,\"activation_mode\":\"0\",\"side_input_scale\":0}"
+  File "/data/dyf/alpa/examples/ViT/run_image_classification.py", line 508, in main
+[36m(MeshHostWorker pid=15384)[0m Exception ignored in: <function NormalMeshWorkerExecutable.__del__ at 0x7f8e2fc254c0>
+    state, train_metric = p_train_step(state, batch)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/jax/_src/traceback_util.py", line 162, in reraise_with_filtered_traceback
+[36m(MeshHostWorker pid=15384)[0m Traceback (most recent call last):
+[36m(MeshHostWorker pid=15384)[0m   File "/data/dyf/alpa/alpa/mesh_executable.py", line 486, in __del__
+[36m(MeshHostWorker pid=15384)[0m     self.compiled.delete()
+    return fun(*args, **kwargs)
+  File "/data/dyf/alpa/alpa/api.py", line 129, in __call__
+[36m(MeshHostWorker pid=15384)[0m AttributeError: 'PartialGradAccMeshWorkerExecutable' object has no attribute 'compiled'
+    self._decode_args_and_get_executable(*args))
+  File "/data/dyf/alpa/alpa/api.py", line 203, in _decode_args_and_get_executable
+    executable = _compile_parallel_executable(f, in_tree, out_tree_hashable,
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/jax/linear_util.py", line 309, in memoized_fun
+    ans = call(fun, *args)
+  File "/data/dyf/alpa/alpa/api.py", line 235, in _compile_parallel_executable
+    return method.compile_executable(fun, in_tree, out_tree_thunk,
+  File "/data/dyf/alpa/alpa/parallel_method.py", line 244, in compile_executable
+    return compile_pipeshard_executable(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/compile_executable.py", line 117, in compile_pipeshard_executable
+    pipeshard_config = compile_pipeshard_executable_internal(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/compile_executable.py", line 184, in compile_pipeshard_executable_internal
+    manual_stage_option) = cluster_layers_and_slice_mesh(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_construction.py", line 638, in cluster_layers_and_slice_mesh
+    compute_cost, max_n_succ_stages = get_compute_cost(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 1298, in get_compute_cost
+    profile_results = distributed_profile_on_mesh(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 1128, in distributed_profile_on_mesh
+    profile_results = profile_all(stages, compiled_outputs, meshes,
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 622, in profile_all
+    *module_raw_result) = profile_workers.get_next_unordered()
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 158, in get_next_unordered
+    return self.pool.get_next_unordered(
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/util/actor_pool.py", line 370, in get_next_unordered
+    return ray.get(future)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/auto_init_hook.py", line 21, in auto_init_wrapper
+    return fn(*args, **kwargs)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/client_mode_hook.py", line 103, in wrapper
+    return func(*args, **kwargs)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/worker.py", line 2664, in get
+    values, debugger_breakpoint = worker.get_objects(object_refs, timeout=timeout)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/worker.py", line 871, in get_objects
+    raise value.as_instanceof_cause()
+jax._src.traceback_util.UnfilteredStackTrace: ray.exceptions.RayTaskError(KeyError): [36mray::ProfileWorker.profile()[39m (pid=15225, ip=114.212.82.188, actor_id=69e81419fa0dbfb293b6cec106000000, repr=<alpa.pipeline_parallel.stage_profiling.ProfileWorker object at 0x7fa98ce13370>)
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 379, in profile
+    return self._profile_impl(stage_id, compiled_output, stage_plan,
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 363, in _profile_impl
+    peak_memory = executable.get_total_allocation_size()
+  File "/data/dyf/alpa/alpa/mesh_executable.py", line 383, in get_total_allocation_size
+    return (ray.get(self.physical_mesh.workers[0].
+ray.exceptions.RayTaskError(KeyError): [36mray::MeshHostWorker.get_exec_total_allocation_size()[39m (pid=15384, ip=114.212.82.188, actor_id=ae7dd32edcda732b3c2f570806000000, repr=<alpa.device_mesh.MeshHostWorker object at 0x7f8e289f5af0>)
+  File "/data/dyf/alpa/alpa/device_mesh.py", line 288, in get_exec_total_allocation_size
+    return self.executables[uuid].get_total_allocation_size()
+KeyError: 1
+
+The stack trace below excludes JAX-internal frames.
+The preceding is the original exception that occurred, unmodified.
+
+--------------------
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/dyf/alpa/examples/ViT/run_image_classification.py", line 580, in <module>
+    main()
+  File "/data/dyf/alpa/examples/ViT/run_image_classification.py", line 508, in main
+    state, train_metric = p_train_step(state, batch)
+  File "/data/dyf/alpa/alpa/pipeline_parallel/compile_executable.py", line 117, in compile_pipeshard_executable
+    pipeshard_config = compile_pipeshard_executable_internal(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/compile_executable.py", line 184, in compile_pipeshard_executable_internal
+    manual_stage_option) = cluster_layers_and_slice_mesh(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_construction.py", line 638, in cluster_layers_and_slice_mesh
+    compute_cost, max_n_succ_stages = get_compute_cost(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 1298, in get_compute_cost
+    profile_results = distributed_profile_on_mesh(
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 1128, in distributed_profile_on_mesh
+    profile_results = profile_all(stages, compiled_outputs, meshes,
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 622, in profile_all
+    *module_raw_result) = profile_workers.get_next_unordered()
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 158, in get_next_unordered
+    return self.pool.get_next_unordered(
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/util/actor_pool.py", line 370, in get_next_unordered
+    return ray.get(future)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/auto_init_hook.py", line 21, in auto_init_wrapper
+    return fn(*args, **kwargs)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/client_mode_hook.py", line 103, in wrapper
+    return func(*args, **kwargs)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/worker.py", line 2664, in get
+    values, debugger_breakpoint = worker.get_objects(object_refs, timeout=timeout)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/worker.py", line 871, in get_objects
+    raise value.as_instanceof_cause()
+ray.exceptions.RayTaskError(KeyError): [36mray::ProfileWorker.profile()[39m (pid=15225, ip=114.212.82.188, actor_id=69e81419fa0dbfb293b6cec106000000, repr=<alpa.pipeline_parallel.stage_profiling.ProfileWorker object at 0x7fa98ce13370>)
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 379, in profile
+    return self._profile_impl(stage_id, compiled_output, stage_plan,
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 363, in _profile_impl
+    peak_memory = executable.get_total_allocation_size()
+  File "/data/dyf/alpa/alpa/mesh_executable.py", line 383, in get_total_allocation_size
+    return (ray.get(self.physical_mesh.workers[0].
+ray.exceptions.RayTaskError(KeyError): [36mray::MeshHostWorker.get_exec_total_allocation_size()[39m (pid=15384, ip=114.212.82.188, actor_id=ae7dd32edcda732b3c2f570806000000, repr=<alpa.device_mesh.MeshHostWorker object at 0x7f8e289f5af0>)
+  File "/data/dyf/alpa/alpa/device_mesh.py", line 288, in get_exec_total_allocation_size
+    return self.executables[uuid].get_total_allocation_size()
+KeyError: 1
+2024-10-07 18:27:56,246	ERROR services.py:1419 -- 'NoneType' object is not iterable
+Exception ignored in: <function BaseWorkerPoolWrapper.__del__ at 0x7f71f5379ca0>
+Traceback (most recent call last):
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 173, in __del__
+    self.shutdown()
+  File "/data/dyf/alpa/alpa/pipeline_parallel/stage_profiling.py", line 165, in shutdown
+    ray.kill(w)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/auto_init_hook.py", line 20, in auto_init_wrapper
+    auto_init_ray()
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/auto_init_hook.py", line 14, in auto_init_ray
+    ray.init()
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/client_mode_hook.py", line 103, in wrapper
+    return func(*args, **kwargs)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/worker.py", line 1679, in init
+    _global_node = ray._private.node.Node(
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/node.py", line 339, in __init__
+    self.start_ray_processes()
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/node.py", line 1420, in start_ray_processes
+    self.start_raylet(plasma_directory, object_store_memory)
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/node.py", line 1198, in start_raylet
+    process_info = ray._private.services.start_raylet(
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/services.py", line 1755, in start_raylet
+    if not ray._private.utils.check_dashboard_dependencies_installed():
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/_private/utils.py", line 1346, in check_dashboard_dependencies_installed
+    import ray.dashboard.optional_deps  # noqa: F401
+  File "/home/ainet/anaconda3/envs/alpa/lib/python3.9/site-packages/ray/dashboard/optional_deps.py", line 6, in <module>
+    import aiohttp  # noqa: F401
+  File "<frozen importlib._bootstrap>", line 1007, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 982, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 925, in _find_spec
+  File "<frozen importlib._bootstrap_external>", line 1423, in find_spec
+  File "<frozen importlib._bootstrap_external>", line 1389, in _get_spec
+TypeError: 'NoneType' object is not iterable
+
+                                                    [A

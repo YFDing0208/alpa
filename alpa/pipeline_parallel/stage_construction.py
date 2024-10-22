@@ -620,6 +620,11 @@ def cluster_layers_and_slice_mesh(
                                       "existing physical meshes is not"
                                       "supported yet.")
 
+        virtual_mesh.print()
+        print(f"stage_option.submesh_physical_shape_space :{stage_option.submesh_physical_shape_space}")
+        print(f"stage_option.submesh_logical_shape_space: {stage_option.submesh_logical_shape_space}")
+        print(f"stage_option.manually_specified_submeshes: {stage_option.manually_specified_submeshes}")
+
         submesh_choices = get_submesh_choices(
             virtual_mesh.num_hosts, virtual_mesh.num_devices_per_host,
             stage_option.submesh_physical_shape_space,

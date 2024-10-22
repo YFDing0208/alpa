@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 # for dataset and preprocessing
+import alpa.parallel_method
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -358,8 +359,8 @@ def main():
 
     # Store some constant
     num_epochs = int(training_args.num_train_epochs)
-    train_batch_size = int(training_args.per_device_train_batch_size) * alpa.get_global_num_devices()
-    eval_batch_size = int(training_args.per_device_eval_batch_size) * alpa.get_global_num_devices()
+    train_batch_size = int(training_args.per_device_train_batch_size)# * alpa.get_global_num_devices()
+    eval_batch_size = int(training_args.per_device_eval_batch_size)# * alpa.get_global_num_devices()
     steps_per_epoch = len(train_dataset) // train_batch_size
     total_train_steps = steps_per_epoch * num_epochs
 
@@ -469,11 +470,16 @@ def main():
         return metrics
 
     # Create parallel version of the train and eval step
-    method = alpa.Zero2Parallel()
+    #method = alpa.Zero2Parallel()
+    train_method = alpa.parallel_method.PipeshardParallel(stage_option="auto")
     p_train_step = alpa.parallelize(train_step,
-                                    method=method,
+                                    method=train_method,
                                     donate_argnums=(0,))
-    p_eval_step = alpa.parallelize(eval_step)
+    #eval_method = alpa.parallel_method.PipeshardParallel(pipeline_schedule="inference", 
+                                                          #stage_option="auto")
+    #p_eval_step = alpa.parallelize(eval_step)
+                                   #method=eval_method)
+    
     dump_debug_info_train_step = dump_debug_info_eval_step = True
 
     logger.info("***** Running training *****")
@@ -527,7 +533,7 @@ def main():
         )
 
         # ======================== Evaluating ==============================
-        eval_metrics = []
+        '''eval_metrics = []
         eval_steps = max(len(eval_dataset) // eval_batch_size, 1)
         eval_step_progress_bar = tqdm(total=eval_steps, desc="Evaluating...", position=2, leave=False)
         for batch in eval_loader:
@@ -554,7 +560,8 @@ def main():
         )
         epochs.write(desc)
         epochs.desc = desc
-
+        '''
+        
         # Save metrics
         if has_tensorboard and jax.process_index() == 0:
             cur_step = epoch * (len(train_dataset) // train_batch_size)

@@ -6,9 +6,9 @@ The hierarchy of classes defined in this file:
 
 DeviceCluster  (the whole ray cluster)
 |
-PhysicalDeviceMeshGroup  (multiple device meshes)
-|
-PhysicalDeviceMesh  (one device mesh)
+PhysicalDeviceMeshGroup  (multiple device meshes)   ----GPUletsMeshGroup (multiple meshes)
+|                                                       |
+PhysicalDeviceMesh  (one device mesh)               ----GPUletsMesh (one mesh conpose of GPUlets)
 |
 MeshHostWorker  (one host in a device mesh)
 
@@ -56,7 +56,8 @@ from alpa.util import (benchmark_func, list_gpu_info, OrderedSet,
                        update_jax_platform, is_ray_node_resource,
                        try_import_ray_worker, create_placement_group,
                        get_bundle_idx, retrieve_placement_group, get_bundle2ip,
-                       check_server_port)
+                       check_server_port, GPUInfoActor,
+                       )
 
 ray_worker = try_import_ray_worker()
 
@@ -82,6 +83,98 @@ ReshardingBroadcastSpec = namedtuple("ReshardingBroadcastSpec", [
 ])
 ReshardingBroadcastTask = namedtuple("ReshardingBroadcastTask",
                                      ["broadcast_specs", "group_name"])
+
+
+##################################################################
+# A lookup table for compute capacity of GPUs.
+# The key is the GPU name returned by 'nvidia-smi --query-gpu=name'.
+##################################################################
+# TODO: add more GPUs.
+
+# The value is the compute capacity for 'Single-Precision(FP32) Performance(TFLOPS)'.
+ComputeCapacityTable = {
+    "NVIDIA GeForce RTX 3090": 35.6,
+    "Tesla V100-SXM2-32GB": 15.7,
+}
+
+# The value is the memory bandwidth (GB/s)'.
+MemoryBandwidthTable = {
+    "NVIDIA GeForce RTX 3090": 936,
+    "Tesla V100-SXM2-32GB": 900,
+}
+
+# The value is the interconnect bandwidth within a node (GB/s)'.
+InterconnectBandwidthTable = {
+    "NVIDIA GeForce RTX 3090": 7.41,
+    "Tesla V100-SXM2-32GB": 300,
+}
+
+
+########################################
+# Virtual Device(GPUlet)
+########################################
+class GPUlet:
+    """
+        A Virtual GPU.
+        we call it as GPUlets.
+    """
+    id = 0
+
+    def __init__(self, memory: int, parent):
+        self.id = GPUlet.id
+        GPUlet.id += 1
+
+        self.parent = parent
+        self.memory = memory
+
+
+    def print_info(self):
+        print(f"        GPUlets ID: {self.id}, Memory: {self.memory}")
+        print(f"        belongs to {self.parent.gpu_name}: {self.parent.uuid}")
+
+
+
+
+
+
+########################################
+# Physical Device
+########################################
+class PhysicalGPU:
+    """
+        A Physical GPU.
+    """
+
+    def __init__(self, gpu_name: str, uuid: str, memory: str, node_id: str):
+        self.gpu_name = gpu_name
+        self.uuid = uuid
+        self.compute_capacity = ComputeCapacityTable[self.gpu_name]
+        self.memory = int(memory)
+        self.node_id = node_id
+        self.gpulets = []
+
+    def set_gpulets(self):
+        if len(self.gpulets) != 0:  #对于每个GPU，该函数应该只被调用一次
+            raise RuntimeError("set_gpulets should be called only once for each physical GPU!")
+        elif not global_config.enable_gpulets:
+            raise RuntimeError("set_gpulets is NOT allowed for global_config.enable_gpulets is False!")
+        num_gpulets = self.memory // global_config.gpulets_size
+        self.gpulets = [GPUlet(global_config.gpulets_size, self) for _ in range(num_gpulets)]
+
+    def print_info(self):
+        print(f"Physical GPU: {self.gpu_name}")
+        print(f"    UUID: {self.uuid}")
+        print(f"    Memory: {self.memory}")
+        print(f"    Node ID: {self.node_id}")
+        print(f"    Compute Capacity: {self.compute_capacity}")
+        print("    GPUlets:")
+        for gpulet in self.gpulets:
+            gpulet.print_info()
+
+
+
+
+
 
 
 ########################################
@@ -1884,6 +1977,14 @@ class VirtualPhysicalMesh:
                                        num_devices_per_host=len(indices[0]),
                                        parent=self,
                                        devices=indices)
+        
+    def print(self):
+        print()
+        print("-*-*-*-*-VirtualPhysicalMesh-*-*-*-*-")
+        print("host_ids:", self.host_ids)
+        print("host_info:", self.host_info)
+        print("num_devices_per_host:", self.num_devices_per_host)
+        print("devices:", self.devices)
 
     def slice_2d(self, host_indices, device_indices):
         host_ids = [self.host_ids[x] for x in host_indices]
@@ -2152,7 +2253,22 @@ class DeviceCluster:
         all_host_info = []
         all_host_ips = []
 
+
+        #整个集群内的GPU信息
+        # key: ray.node中的NodeID，value: GPU信息  (name, memory, uuid, capacity)（）
+        # 这里的capacity暂时不用，直接查表 e.g. ComputeCapacityTable[name] = capacity
+        self.gpu_info_per_node = {}
+
         for node in ray.nodes():
+
+            if global_config.enable_gpulets:
+                # get the GPU information from each node
+                actor = GPUInfoActor.options(num_cpus=1, resources={f"node:{node['NodeManagerAddress']}": 0.01}).remote()
+                node_gpu_info = ray.get(actor.get_gpu_info.remote())
+                for gpu_name, memory, uuid, capability  in node_gpu_info:
+                    self.gpu_info_per_node[node['NodeID']]=PhysicalGPU(gpu_name, uuid, memory, capability)
+                ray.kill(actor)
+
             for key in node["Resources"]:
                 if (is_ray_node_resource(key) and
                         global_config.ray_accelerator_name
@@ -2166,6 +2282,11 @@ class DeviceCluster:
             number = host_info["Resources"][global_config.ray_accelerator_name]
             assert number.is_integer()
             all_host_num_devices.append(int(number))
+
+        print()
+        print(f"all_host_info: {all_host_info}")
+        #print(f"all_host_ips: {all_host_ips}")
+        print(f"all_host_num_devices: {all_host_num_devices}")
 
         # adjust the resource allocations
         # if `num_nodes` is set, use it.
@@ -2323,6 +2444,7 @@ def init_global_cluster(cluster: str,
     elif cluster == "ray":
         if not ray.is_initialized():
             ray_addr = cluster_address if cluster_address else "auto"
+            print(f"Initializing ray with address {ray_addr}")
             ray.init(address=ray_addr,
                      ignore_reinit_error=True,
                      namespace=namespace)
@@ -2330,6 +2452,9 @@ def init_global_cluster(cluster: str,
         global_cluster = DeviceCluster(num_nodes, num_devices_per_node)
         global_virtual_physical_mesh = (
             global_cluster.get_virtual_physical_mesh())
+        
+        #global_virtual_physical_mesh.num_devices_per_host = 4
+        #logger.warning("Changing num_devices of global virtual physical mesh for now.")
 
 
 def shutdown_global_cluster():

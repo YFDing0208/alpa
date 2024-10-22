@@ -31,6 +31,7 @@ class InstallationTest(unittest.TestCase):
 
     def test_2_pipeline_parallel(self):
         init(cluster="ray")
+        #init(cluster="local")
 
         state, batch, train_step = get_mlp_train_state_and_step(batch_size=128,
                                                                 hidden_size=128,

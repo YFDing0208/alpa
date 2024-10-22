@@ -1418,8 +1418,11 @@ def get_bundle2ip(pg: PlacementGroup = None):
     dict_bg2ip = {}
 
     ray_state = try_import_ray_state()
-    resources_list = ray_state.state._available_resources_per_node(  # pylint: disable=protected-access
-    ).values()
+    #resources_list = ray_state.state._available_resources_per_node(  # pylint: disable=protected-access
+    #).values()
+    #change state._available_resources_per_node to state.available_resources_per_node
+    resources_list = ray_state.state.available_resources_per_node(  # pylint: disable=protected-access
+    ).values() 
 
     for resource in resources_list:
         resource_name_list = resource.keys()
@@ -1712,3 +1715,55 @@ def mesh_ids_hash(mesh_ids):
     for i in sorted(mesh_ids):
         ret += bytes(f"{i}", "utf-8") + b"$"
     return ret
+
+
+
+
+########################################
+##### GPU Utilities
+########################################
+
+
+@ray.remote
+def get_gpu_info():
+    try:
+        # 获取 GPU 型号、内存大小、UUID和计算能力
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name,memory.total,uuid,compute_cap", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # 处理输出
+        gpu_info = result.stdout.strip().split('\n')
+        gpu_details = []
+        for info in gpu_info:
+            name, memory, uuid, capability = info.split(', ')
+            gpu_details.append((name, memory, uuid, capability))
+        return gpu_details
+    except subprocess.CalledProcessError:
+        return ["No GPU or nvidia-smi error"]
+    
+
+@ray.remote
+class GPUInfoActor:
+    def get_gpu_info(self):
+        try:
+            # 获取 GPU 型号、内存大小、UUID 和计算能力
+            result = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name,memory.total,uuid,compute_cap", "--format=csv,noheader,nounits"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            # 处理输出
+            gpu_info = result.stdout.strip().split('\n')
+            gpu_details = []
+            for info in gpu_info:
+                name, memory, uuid, capability = info.split(', ')
+                gpu_details.append((name, memory, uuid, capability))
+            return gpu_details
+        except subprocess.CalledProcessError:
+            return ["No GPU or nvidia-smi error"]

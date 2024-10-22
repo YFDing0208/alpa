@@ -124,6 +124,7 @@ class DataParallel(ShardParallel):
                  num_micro_batches: Optional[int] = None):
         as_option = AutoShardingOption(force_data_parallel=True,
                                        prefer_reduce_scatter=False)
+        #print(f"Device: {devices}")
         super().__init__(devices, num_micro_batches, as_option)
 
 
@@ -140,6 +141,7 @@ class Zero2Parallel(ShardParallel):
                  num_micro_batches: Optional[int] = None):
         as_option = AutoShardingOption(force_data_parallel=True,
                                        prefer_reduce_scatter=True)
+        print(f"Device: {devices}")
         super().__init__(devices, num_micro_batches, as_option)
 
 
@@ -236,6 +238,8 @@ class PipeshardParallel(ParallelMethod):
             mesh = self.devices
 
         assert isinstance(mesh, VirtualPhysicalMesh)
+
+        #print(f"Device: {mesh}")
 
         return compile_pipeshard_executable(
             fun, in_tree, out_tree_thunk, static_argnums, donated_invars,

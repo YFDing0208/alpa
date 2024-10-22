@@ -74,6 +74,8 @@ def compile_pipeshard_executable(
     debug_compilation_time(None)
     name_base = f"{fun.__name__}_pipeshard_parallel"
 
+    compile_start_time = time.time()
+
     # Apply layer construction to add pipeline markers.
     with GradFuncTransformContext(layer_option.transform):
         if pipeline_schedule == "inference":
@@ -108,11 +110,18 @@ def compile_pipeshard_executable(
                                                       in_tree, out_tree)
     else:
         parsed_ms_option = None
+
+    #print(f"closed_jaxpr: {closed_jaxpr}")
+    #print(f"full_batch_closed_jaxpr: {full_batch_closed_jaxpr}")
+
     pipeshard_config = compile_pipeshard_executable_internal(
         closed_jaxpr, full_batch_closed_jaxpr, micro_batch_size, donated_invars,
         batch_invars, virtual_mesh, num_microbatch, pipeline_schedule,
         default_as_option, stage_option, name_base, global_input_shardings,
         None, stage_input_shardings, parsed_ms_option)
+
+    logger.info(f"Compile time: {time.time() - compile_start_time}")
+    compile_start_time = time.time()
 
     executable = PipeshardDriverExecutable(
         mesh_group=virtual_mesh.launched_physical_mesh_group,
@@ -122,6 +131,9 @@ def compile_pipeshard_executable(
         in_tree=in_tree,
         out_tree=out_tree,
         static_argnums=static_argnums)
+    
+    logger.info(f"Get executable time: {time.time() - compile_start_time}")
+
     debug_compilation_time("driver executable")
     return executable
 

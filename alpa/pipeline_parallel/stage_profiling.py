@@ -664,9 +664,12 @@ def generate_training_stages_2d(layers,
     is_full_mesh = computation_source_ratio == 1
     tot_flops = layer_flops_prefix_sum[2 * num_layers]
     stages = []
+
+    print(f"num_layers: {num_layers}")
+
     for start in tqdm.tqdm(range(0, num_layers)):
         for end in tqdm.tqdm(range(start, num_layers), leave=False):
-            if is_full_mesh and not (start == 0 and end == num_layers - 1):
+            if is_full_mesh and not (start == 0 and end == num_layers - 1): #如果占用全部资源但是却不训练整个模型就应该跳过
                 continue
             flops_ratio = (
                 layer_flops_prefix_sum[end + 1] - layer_flops_prefix_sum[start]
@@ -1279,7 +1282,21 @@ def get_compute_cost(
             raise ValueError(f"Unknown layer profile mode: "
                              f"{auto_stage_option.layer_profile_mode}")
 
+        print(f"profile_results before check: {profile_results}")
         check_profile_results_consistent(stages, profile_results)
+
+        print("get_compute_cost() in stage_profiling.py:")
+        print(f"==auto_sharding_configs:")
+        for config in autosharding_configs[mesh_id]:
+            print(f"config: {config}")
+        print(f"==stages to profile:")
+        for stage_indice, _, _ in stages:
+            print(f"stage_idx: {stage_indice}")
+        print(f"==sliced_virtual_meshes:")
+        for i, mesh in enumerate(sliced_virtual_meshes):
+            print(f"sliced_virtual_mesh {i}: host_ids->{mesh.host_ids} \
+                    num_devices_per_host->{mesh.num_devices_per_host}  devices->{mesh.devices}")
+            
 
         profile_results = distributed_profile_on_mesh(
             stages, sliced_virtual_meshes, num_micro_batches, default_as_option,

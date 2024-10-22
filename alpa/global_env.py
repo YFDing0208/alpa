@@ -100,6 +100,14 @@ class GlobalConfig:
         # Whether to collect activity trace
         self.collect_trace = False
 
+
+
+        ########## Options of heterogeneous cluster ##########
+        # Whether to enable GPUlets options
+        self.enable_gpulets = False
+        # The memory size of each GPUlets (GB) 
+        self.gpulets_size = 8
+
     @property
     def ray_accelerator_name(self):
         backend_to_ray = {"gpu": "GPU"}

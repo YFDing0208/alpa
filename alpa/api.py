@@ -128,6 +128,8 @@ class ParallelizedFunc:
         executable, _, out_tree, args_flat = (
             self._decode_args_and_get_executable(*args))
         out = executable.launch_on_driver(*args_flat)
+
+        #print(f"result :{tree_unflatten(out_tree(), out)}")
         return tree_unflatten(out_tree(), out)
 
     def get_executable(self, *args):
@@ -170,6 +172,8 @@ class ParallelizedFunc:
                     frozen_args.append(FrozenDict(arg))
                 else:
                     frozen_args.append(arg)
+            
+            #argnums_partial 会返回一个新的函数调用和动态参数元组，其中返回的函数已经固定了静态参数
             f, dyn_args = argnums_partial(f, dyn_argnums, frozen_args)
         else:
             dyn_args = args
