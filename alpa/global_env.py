@@ -104,7 +104,7 @@ class GlobalConfig:
 
         ########## Options of heterogeneous cluster ##########
         # Whether to enable GPUlets options
-        self.enable_gpulets = False
+        self.enable_gpulets = True
         # The memory size of each GPUlets (GB) 
         self.gpulets_size = 8
 
