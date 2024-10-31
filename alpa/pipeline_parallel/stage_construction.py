@@ -453,6 +453,66 @@ def get_submesh_choices(
     return tuple(submesh_choices)
 
 
+def get_sub_gpulet_mesh_choices(
+        num_gpus: int,
+        num_gpulets_per_gpu: Sequence[int],
+        space: str,
+        #manually_specified_submeshes: Optional[Sequence[Tuple[int, int]]] = None
+        ):
+    """获得由gpulets组成的mesh的所有可能切分形状"""
+
+    assert global_config.enable_gpulets, (
+        "GPUlets are not enabled. So  you CANNOT use this function.")
+
+    min_gpulet_per_gpu = min(num_gpulets_per_gpu)
+    total_num_gpulets = sum(num_gpulets_per_gpu)
+
+    submesh_choices = []
+
+
+    assert total_num_gpulets >= global_config.max_gpulets_per_submesh, (
+        "The maximum number of gpulets per submesh is larger than the  "
+        "total number of gpulets.")
+    i = 1
+    while i <= global_config.max_gpulets_per_submesh:
+        submesh_choices.append((1, i))
+        i *= 2
+    assert submesh_choices[-1][1] == global_config.max_gpulets_per_submesh, (
+        "Only supports the cases where num_devices_per_host is power of two, "
+        f"while now num_devices_per_host = {global_config.max_gpulets_per_submesh}")
+
+    """
+    # smaller submeshes:
+    i = 1
+    while i <= num_devices_per_host:
+        submesh_choices.append((1, i))
+        i *= 2
+    assert submesh_choices[-1][1] == num_devices_per_host, (
+        "Only supports the cases where num_devices_per_host is power of two, "
+        f"while now num_devices_per_host = {num_devices_per_host}") 
+
+    # larger meshes:
+    if space == "all":
+        for i in range(2, num_gpus + 1):
+            submesh_choices.append((i, num_devices_per_host))
+    elif space == "power_of_two":
+        i = 2
+        while i <= num_gpus:
+            submesh_choices.append((i, num_devices_per_host))
+            i *= 2
+    elif space == "small_power_of_two":
+        i = 2
+        while i <= min(num_gpus, 4):
+            submesh_choices.append((i, num_devices_per_host))
+            i *= 2
+    else:
+        raise ValueError(f"Invalid submesh space: {space}")
+    """
+
+    return tuple(submesh_choices)
+
+
+
 def get_one_submesh_autosharding_config_choices(
         virtual_submesh: VirtualPhysicalMesh, space: str, batch_size: int):
     """
@@ -624,6 +684,12 @@ def cluster_layers_and_slice_mesh(
         print(f"stage_option.submesh_physical_shape_space :{stage_option.submesh_physical_shape_space}")
         print(f"stage_option.submesh_logical_shape_space: {stage_option.submesh_logical_shape_space}")
         print(f"stage_option.manually_specified_submeshes: {stage_option.manually_specified_submeshes}")
+
+
+        gpulet_mesh = None
+        if global_config.enable_gpulets:
+            gpulet_mesh = virtual_mesh.get_gpulet_mesh()
+            
 
         submesh_choices = get_submesh_choices(
             virtual_mesh.num_hosts, virtual_mesh.num_devices_per_host,
