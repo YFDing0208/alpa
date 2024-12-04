@@ -167,6 +167,12 @@ class LogicalDeviceMesh:
         return ((self.flatten_ids, self.id_mesh.shape, self.mesh_alpha,
                  self.mesh_beta) == (other.flatten_ids, other.id_mesh.shape,
                                      other.mesh_alpha, other.mesh_beta))
+    
+    def print(self):
+        print(f"logical_mesh: {self.flatten_ids}")
+        print(f"mesh_shape: {self.shape}")
+        print(f"mesh_alpha: {self.mesh_alpha}")
+        print(f"mesh_beta: {self.mesh_beta}")
 
 
 def run_auto_sharding_pass(

@@ -10,4 +10,4 @@ nohup python run_image_classification.py \
     --per_device_eval_batch_size 16 \
     --overwrite_output_dir \
     --preprocessing_num_workers 8 \
-    > vit_train_pipe_single.log 2>&1 & \
+    > vit_train_pipe_single_heter.log 2>&1 & \

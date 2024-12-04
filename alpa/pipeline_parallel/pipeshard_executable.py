@@ -108,6 +108,7 @@ class PipeshardDriverExecutable:
         # Create a PipeshardMeshWorkerExecutable for each MeshHostWorker
         for mesh_idx, physical_mesh in enumerate(self.mesh_group):
             mesh_grad_uuids = pipeshard_config.grad_uuids[mesh_idx]
+            logger.info(f"\n\nhit\n\nhit\n\n")
             for worker in physical_mesh.workers:
                 acc_grad_local_uuids = []
                 if len(mesh_grad_uuids) > 0:

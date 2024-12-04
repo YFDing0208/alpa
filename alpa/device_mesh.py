@@ -168,7 +168,7 @@ class PhysicalGPU:
         elif not global_config.enable_gpulets:
             raise RuntimeError("set_gpulets is NOT allowed when global_config.enable_gpulets is False!")
         self.num_gpulets = int(self.memory // global_config.gpulets_size)
-        self.gpulets = [GPUlet(global_config.gpulets_size, self) for _ in range(self.num_gpulets)]
+        self.gpulets = [GPUlet(memory=global_config.gpulets_size, belong_to=self) for _ in range(self.num_gpulets)]
 
     def print_info(self):
         print(f"Physical GPU: {self.gpu_name}")
@@ -1141,6 +1141,7 @@ class DistributedPhysicalDeviceMesh(PhysicalDeviceMesh):
             self.launched = False
         else:
             self.service_server, self.workers = self.launch_xla_servers()
+            logger.info(f"Launching workers on hosts: {self.host_ids}")
             self.launched = True
 
         self.to_delete_remote_refs = []
@@ -1237,6 +1238,7 @@ class DistributedPhysicalDeviceMesh(PhysicalDeviceMesh):
                 placement_group_bundle_index=bundle_index).remote()
 
             # Launch the MeshHostWorker
+            logger.info(f"num_gpus: {self.num_devices_per_host}")
             cls = ray.remote(num_cpus=0,
                              num_gpus=self.num_devices_per_host)(MeshHostWorker)
             worker = cls.options(placement_group=placement_group,
@@ -1920,7 +1922,10 @@ class VirtualPhysicalMesh:
         self.host_info = host_info
         self.num_devices_per_host = num_devices_per_host
         self.parent = parent
-    
+
+        self.nodeid_to_hostid = {}
+        for host_id, host_info in zip(self.host_ids, self.host_info):
+            self.nodeid_to_hostid[host_info['NodeID']] = host_id
 
         self.gpu_info_per_node = gpu_info_per_node
         self.num_gpus = 0
@@ -1997,14 +2002,14 @@ class VirtualPhysicalMesh:
                                        num_devices_per_host=len(indices[0]),
                                        parent=self,
                                        devices=indices)
-        
+
     def print_gpus_info(self):
         for key in self.gpu_info_per_node.keys():
             gpu_info = self.gpu_info_per_node[key]
             print(f"node {key} has {len(gpu_info)} GPUs")
             for gpu in gpu_info:
                 gpu.print_info()
-        
+
     def print(self):
         print()
         print("-*-*-*-*-VirtualPhysicalMesh-*-*-*-*-")
@@ -2015,11 +2020,17 @@ class VirtualPhysicalMesh:
         print("num_gpus: ", self.num_gpus)
         self.print_gpus_info()
         print("-*-*-*-*-VirtualPhysicalMesh  END-*-*-*-*-")
-        
+
 
     def slice_2d(self, host_indices, device_indices):
         host_ids = [self.host_ids[x] for x in host_indices]
         host_info = [self.host_info[x] for x in host_indices]
+
+        gpu_info_per_node = {}
+        for host in host_info:
+            node_id = host["NodeID"]
+            gpu_info_per_node[node_id] = self.gpu_info_per_node[node_id]
+
 
         # Check the validity of device_indices
         for i in range(len(device_indices)):
@@ -2029,8 +2040,59 @@ class VirtualPhysicalMesh:
         return VirtualPhysicalMesh(host_ids=host_ids,
                                    host_info=host_info,
                                    num_devices_per_host=len(device_indices[0]),
+                                   gpu_info_per_node=gpu_info_per_node,
                                    parent=self,
                                    devices=device_indices)
+
+    def slice_2d_from_gpulet_mesh(self, gpu_infos: Sequence[PhysicalGPU]):
+        host_ids = []
+        host_info = []
+        devices = []
+        gpu_info_per_node = {}
+
+        """self.gpu_id = PhysicalGPU.gpu_id
+        PhysicalGPU.gpu_id += 1
+
+        self.gpu_name = gpu_name
+        self.uuid = uuid
+        self.compute_capacity = ComputeCapacityTable[self.gpu_name]
+        self.memory = float(float(memory) / 1024)
+        self.node_id = node_id
+        self.gpulets = []
+        self.num_gpulets = 0"""
+        prev_host_id = -1
+        prev_node_id = None
+        tmp_devices = []
+        tmp_gpu_infos = []
+        for gpu_info in gpu_infos:
+            host_id = self.nodeid_to_hostid[gpu_info.node_id]
+            if host_id != prev_host_id and prev_host_id != -1:
+                devices.append(tmp_devices)
+                tmp_devices = []
+                gpu_info_per_node[prev_node_id] = tmp_gpu_infos
+                tmp_gpu_infos = []
+                host_ids.append(prev_host_id)
+            
+            host_info.append(self.host_info[host_id])
+            tmp_gpu_infos.append(gpu_info)
+            tmp_devices.append(gpu_info.gpu_id)
+            prev_host_id = host_id
+            prev_node_id = gpu_info.node_id
+        
+        host_ids.append(prev_host_id)
+        devices.append(tmp_devices)
+        gpu_info_per_node[prev_node_id] = tmp_gpu_infos
+        num_devices_per_host = max([len(x) for x in devices])
+
+            
+        return VirtualPhysicalMesh(host_ids=host_ids,
+                                   host_info=host_info,
+                                   num_devices_per_host=num_devices_per_host,
+                                   gpu_info_per_node=gpu_info_per_node,
+                                   parent=self,
+                                   devices=devices)
+
+
 
     def slice_profiling_submeshes(self, submesh_num_hosts,
                                   submesh_num_devices_per_host):
@@ -2073,7 +2135,10 @@ class VirtualPhysicalMesh:
         """Launch a physical mesh (which will request resources from Ray)."""
         assert self.launched_physical_mesh is None, \
             "Physical mesh can only be launched once."
-
+        
+        #logger.info(f"Launching physical mesh (mesh_id){mesh_id} on (host_ids){self.host_ids}"\
+        #            f" (devices){self.devices}")
+        logger.info(f"num_devices_per_host: {self.num_devices_per_host}")
         self.launched_physical_mesh = DistributedPhysicalDeviceMesh(
             host_ids=self.host_ids,
             host_info=self.host_info,
@@ -2111,15 +2176,22 @@ class VirtualPhysicalMesh:
     def get_gpulet_mesh(self):
         #assert self.is_gpulet_mesh, "This mesh is not a GPUletMesh."
         gpu_ids = []
+        gpu_infos = []
         for info in self.gpu_info_per_node.values():
             for gpu in info:
                 gpu_ids.append(gpu.gpu_id)
+                gpu_infos.append(gpu)
+
+        #gpu_infos = [gpuinfo for gpuinfo in self.gpu_info_per_node.values()]
+        #print(self.gpu_info_per_node.values())
+        #gpu_infos = list(self.gpu_info_per_node.values())
+
         return GPUletMesh(
             gpu_ids=gpu_ids,
-            gpu_infos=self.gpu_info_per_node,
-            num_gpu=self.num_gpus,
-
+            gpu_infos=gpu_infos,
             belong_to=self,
+            parent=None, # 表明这个GPUletMesh是由哪个GPUletMesh切分而来，
+                         # 对于由VirtualPhyscialMesh转化的GPUletMesh而言，parent应该为None
         )
 
 
@@ -2135,19 +2207,42 @@ class GPUletMesh():
 
     def __init__(self,
                  gpu_ids: Sequence[int],
-                 gpu_infos: Sequence[dict],
-                 num_gpu: int,  #mesh中物理gpu的数量，对应于VirtualPhysicalMesh中的host
-                 #num_devices_per_host,
+                 #gpulets
+                 gpu_infos: Sequence[PhysicalGPU],
                  belong_to: "VirtualPhysicalMesh" = None,   #对应于哪个VirtualPhysicalMesh
                  parent: "GPUletMesh" = None,   #由哪个GPUletMesh切分而来
-                 #devices: Sequence[Sequence[int]] = None
+                 gpulets: Sequence[Sequence[GPUlet]] = None    #第一个维度表示不同的gpu，第二个维度表示同一个gpu内的gpulet的id
                 ):
-        # host_ids are the indices of hosts in the global DeviceCluster
+       
         self.gpu_ids = gpu_ids
         self.gpu_infos = gpu_infos
-        self.num_gpu = num_gpu
+        self.num_gpu = len(gpu_ids) #mesh中物理gpu的数量，对应于VirtualPhysicalMesh中的host
         self.belong_to = belong_to
         self.parent = parent
+
+
+        if gpulets is None:
+            gpulets = []
+            for gpu in self.gpu_infos:
+                gpulets.append(gpu.gpulets)
+
+        self.gpulets = gpulets
+        # 当二维数组内的每个一维数组长度不同时，使用np.flatten不会将其转化为一维
+        #self.flatten_gpulets = np.array(gpulets).flatten().tolist()
+        self.flatten_gpulets = []
+        for gpulet in gpulets:
+            self.flatten_gpulets.extend(gpulet)
+
+
+
+        self.flatten_gpuids = []
+        for gpulet in self.flatten_gpulets:
+            self.flatten_gpuids.append(gpulet.belong_to.gpu_id)
+        
+
+
+        self.num_gpulets_per_gpu = [len(x) for x in self.gpulets]
+        self.num_gpulets = sum(self.num_gpulets_per_gpu)
 
         #self.launched_physical_mesh = None
         #self.launched_physical_mesh_group = None
@@ -2175,7 +2270,134 @@ class GPUletMesh():
         '''
 
 
+    def slice_2d(self, gpu_indices, gpulet_indices):
+        raise NotImplementedError("GPUletMesh does not support slice_2d() now.")
+        gpu_ids = [self.gpu_ids[x] for x in gpu_indices]
+        gpu_infos = [self.gpu_infos[x] for x in gpu_indices]
 
+        # Check the validity of device_indices
+        for i in range(len(gpulet_indices)):
+            for x in gpulet_indices[i]:
+                assert x in self.gpulets[i]
+
+        return GPUletMesh(gpu_ids=gpu_ids,
+                        gpu_infos=gpu_infos,
+                        parent=self,
+                        belong_to=self.belong_to,
+                        gpulets=gpulet_indices)
+
+
+    def slice_1d(self, gpulet_indices: Sequence[int]):
+        """
+        原本整个GPUletMesh是一个二维结构，但是为了解决可能存在的集群物理拓扑的异构性（即每个节点的GPU数量不同），
+        （同时即使每个节点的GPU数量相同，但由于显存的不同，所以每个物理节点的GPUlet数量也会不同）
+        目前的解决方案是在生成profiling阶段时，将整个GPUletMesh的二维结构压缩为一维进行切分
+
+        具体而言slice_1d根据类中的flatten_gpulets进行切分，获取构造函数需要的信息
+        """
+        gpu_ids = []
+        gpu_infos = []
+        gpulets =  []
+        prev_gpu_id = -1
+        prev_gpu = None
+        tmp_gpulets = []
+        for i in gpulet_indices:
+            print(f"i = {i}, self.num_gpulets = {self.num_gpulets}")
+            assert i < self.num_gpulets, "gpulet index out of range"
+            gpulet = self.flatten_gpulets[i]
+            if prev_gpu_id != gpulet.belong_to.gpu_id:
+                if prev_gpu_id != -1:
+                    gpulets.append(tmp_gpulets)
+                    tmp_gpulets = []
+                    gpu_ids.append(prev_gpu_id)
+                    gpu_infos.append(prev_gpu)
+                    #prev_gpu_id = gpulet.belong_to.gpu_id
+            prev_gpu = gpulet.belong_to
+            prev_gpu_id = prev_gpu.gpu_id
+            tmp_gpulets.append(gpulet)
+
+        gpulets.append(tmp_gpulets)
+        gpu_ids.append(prev_gpu_id)
+        gpu_infos.append(prev_gpu)
+
+        return GPUletMesh(gpu_ids=gpu_ids,
+                          gpu_infos=gpu_infos,
+                          parent=self,
+                          belong_to=self.belong_to,
+                          gpulets=gpulets)
+
+
+
+
+    def get_logical_gpulet_mesh(self,
+                         mesh_shape: Optional[Sequence[int]] = None,
+                         mesh_alpha: Optional[float] = None,
+                         mesh_beta: Optional[float] = None):
+        """
+        Return a logical mesh and parameters of the alpha-beta communication
+        cost model. The logical view is used for auto-sharding.
+        """
+        if mesh_shape is None:
+            raise NotImplementedError("GPUletMesh does not support get_logical_mesh() when mesh_shape is None.")
+            #mesh_shape = (self.num_hosts, self.num_devices_per_host)
+
+        id_mesh = np.arange(self.num_gpulets).reshape(mesh_shape)
+        #id_mesh = np.array().reshape(mesh_shape)
+
+        mesh_alpha = mesh_alpha or (1, 1)
+        mesh_beta = mesh_beta or (1, 0.1)
+        return LogicalDeviceMesh(None, id_mesh, mesh_alpha, mesh_beta)
+    
+
+    def slice_profiling_gpulet_submeshes(self, num_gpulets_per_submesh):
+        """num_hosts = len(self.host_ids)
+        num_devices_per_host = self.num_devices_per_host
+        num_host_submeshes = num_hosts // submesh_num_hosts
+        num_device_submeshes = (num_devices_per_host //
+                                submesh_num_devices_per_host)
+        all_submeshes = []
+        for i in range(num_host_submeshes):
+            for j in range(num_device_submeshes):
+                host_indices = range(i * submesh_num_hosts,
+                                     (i + 1) * submesh_num_hosts)
+                device_indices = [
+                    range(j * submesh_num_devices_per_host,
+                          (j + 1) * submesh_num_devices_per_host)
+                    for _ in host_indices
+                ]
+                all_submeshes.append(self.slice_2d(host_indices,
+                                                   device_indices))"""
+
+        num_gpulet_submeshes = self.num_gpulets // num_gpulets_per_submesh
+        all_submeshes = []
+
+        for i in range(num_gpulet_submeshes):
+            gpulet_indices = tuple(
+                range(i * num_gpulets_per_submesh,
+                      (i + 1) * num_gpulets_per_submesh)
+            )
+            print("gpulet_indices: ", gpulet_indices)
+            all_submeshes.append(self.slice_1d(gpulet_indices))
+
+        return all_submeshes
+
+
+    def back_to_virtual_mesh(self):
+        
+
+
+
+        virtual_mesh = self.belong_to.slice_2d_from_gpulet_mesh(self.gpu_infos)
+        return virtual_mesh
+
+
+    def print(self):
+        print("-*-*-*-*-GPUletMesh-*-*-*-*-")
+        print("gpu_ids: ", self.gpu_ids)
+        print("gpu_infos: ", self.gpu_infos)
+        print("num_gpu: ", self.num_gpu)
+        print("gpulets: ", self.gpulets)
+        print("-*-*-*-*-GPUletMesh END-*-*-*-*-")
 
 
 
@@ -2361,18 +2583,28 @@ class DeviceCluster:
         # key: ray.node中的NodeID，value: GPU信息  (name, memory, uuid, capacity)（）
         # 这里的capacity暂时不用，直接查表 e.g. ComputeCapacityTable[name] = capacity
         self.gpu_info_per_node = {}
+        
+        # devices为二维数组，横向代表不同节点，纵向代表不同设备，每个设备用PhysicalGPU的id表示
+        self.devices = []
+
 
         for node in ray.nodes():
             if global_config.enable_gpulets:
                 gpus = []
+                devices = []
                 print(f"GPUlets enabled, getting GPU info from node: {node['NodeManagerAddress']}")
                 # get the GPU information from each node
                 actor = GPUInfoActor.options(num_cpus=1, resources={f"node:{node['NodeManagerAddress']}": 0.01}).remote()
                 node_gpu_info = ray.get(actor.get_gpu_info.remote())
                 for gpu_name, memory, uuid, capability  in node_gpu_info:
-                    gpus.append(PhysicalGPU(gpu_name, uuid, memory, node['NodeID']))
+                    gpu = PhysicalGPU(gpu_name, uuid, memory, node['NodeID'])
+                    gpus.append(gpu)
+                    devices.append(gpu.gpu_id)
                 ray.kill(actor)
+                for gpu in gpus:
+                    gpu.set_gpulets()
                 self.gpu_info_per_node[node['NodeID']]=gpus
+                self.devices.append(devices)
 
             for key in node["Resources"]:
                 if (is_ray_node_resource(key) and
@@ -2534,12 +2766,19 @@ class DeviceCluster:
             gpu_info_per_node[node_id]=(self.gpu_info_per_node[node_id])
 
 
-
-        return VirtualPhysicalMesh(host_ids=host_ids,
-                                   host_info=host_info,
-                                   num_devices_per_host=num_devices_per_host,
-                                   gpu_info_per_node=gpu_info_per_node,
-                                   parent=self)
+        if global_config.enable_gpulets:
+            return VirtualPhysicalMesh(host_ids=host_ids,
+                              host_info=host_info,
+                              num_devices_per_host=num_devices_per_host,
+                              gpu_info_per_node=gpu_info_per_node,
+                              #devices=self.devices,
+                              parent=self)
+        else:
+            return VirtualPhysicalMesh(host_ids=host_ids,
+                                    host_info=host_info,
+                                    num_devices_per_host=num_devices_per_host,
+                                    gpu_info_per_node=gpu_info_per_node,
+                                    parent=self)
 
     def profile_all(self, *args, **kwargs):
         """Profile computation and communication cost for all submesh shapes of
@@ -2556,7 +2795,7 @@ global_gpulet_mesh: GPUletMesh = None
 
 def set_global_gpulet_mesh(mesh: GPUletMesh = None):
     if global_gpulet_mesh:
-        raise NotImplementedError(f"function set_global_gpulet_mesh is only used for \
+        raise NotImplementedError("function set_global_gpulet_mesh is only used for \
                                    initializing the global gpulet mesh.")
 
 
@@ -2584,10 +2823,10 @@ def init_global_cluster(cluster: str,
         global_cluster = DeviceCluster(num_nodes, num_devices_per_node)
         global_virtual_physical_mesh = (
             global_cluster.get_virtual_physical_mesh())
-        
+
         global_gpulet_mesh = (
             global_virtual_physical_mesh.get_gpulet_mesh())
-        
+
         #global_virtual_physical_mesh.num_devices_per_host = 4
         #logger.warning("Changing num_devices of global virtual physical mesh for now.")
 
@@ -2650,6 +2889,10 @@ def set_global_virtual_physical_mesh(mesh: VirtualPhysicalMesh):
 
 def get_global_virtual_physical_mesh():
     return global_virtual_physical_mesh
+
+
+def get_global_gpulet_mesh():
+    return global_gpulet_mesh
 
 
 def set_seed(seed: int):

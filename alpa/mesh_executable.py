@@ -11,6 +11,7 @@ workers.
 from abc import ABC, abstractmethod
 from typing import Sequence, Optional
 import os
+import logging
 
 from jax import xla
 import jax.numpy as jnp
@@ -40,6 +41,8 @@ from alpa.util import (compile_allocate_zero_buffers, get_compile_options,
                        get_microbatch_sharding_spec, profile_xla_executable)
 from alpa.wrapped_hlo import HloStatus, WrappedHlo
 
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 class MeshDriverExecutable(ABC):
     """The base class of the driver part of a mesh executable."""
@@ -432,6 +435,8 @@ class NormalMeshWorkerExecutable(MeshWorkerExecutable):
     def __init__(self, worker: "MeshHostWorker", uuid: int, hlo: WrappedHlo,
                  stage_plan: StagePlan, donated_invars: Sequence[bool]):
         num_devices = np.prod(stage_plan.logical_mesh_shape)
+        logger.info(f"num_devices: {num_devices}, "
+                    f"len(worker.backend.devices()): {len(worker.backend.devices())}")
         assert num_devices == len(worker.backend.devices())
 
         self.compiled = run_backend_compilation(worker.backend, hlo, stage_plan,

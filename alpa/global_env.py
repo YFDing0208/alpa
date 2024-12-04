@@ -106,10 +106,10 @@ class GlobalConfig:
         # Whether to enable GPUlets options
         self.enable_gpulets = True
         # The memory size of each GPUlets (GB)
-        self.gpulets_size = 4.0
+        self.gpulets_size = 24.0
         # 在调用 get_sub_gpulet_mesh 时，每个mesh最多由几个gpulet组成
         # 应该为2的幂
-        self.max_gpulets_per_submesh = 4
+        self.max_gpulets_per_submesh = 1
 
 
 

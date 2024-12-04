@@ -10,7 +10,7 @@ from jax._src.lib import xla_extension as xe
 from jax.core import Var
 import numpy as np
 
-from alpa.device_mesh import VirtualPhysicalMesh
+from alpa.device_mesh import VirtualPhysicalMesh, GPUletMesh
 from alpa.global_env import global_config
 from alpa.pipeline_parallel.computation import (
     JaxPipelineComputation, merge_marked_jaxprs_with_named_call)
@@ -453,11 +453,11 @@ def get_submesh_choices(
     return tuple(submesh_choices)
 
 
-def get_sub_gpulet_mesh_choices(
+def get_gpulet_submesh_choices(
         num_gpus: int,
         num_gpulets_per_gpu: Sequence[int],
         space: str,
-        #manually_specified_submeshes: Optional[Sequence[Tuple[int, int]]] = None
+        # manually_specified_submeshes: Optional[Sequence[Tuple[int, int]]] = None
         ):
     """获得由gpulets组成的mesh的所有可能切分形状"""
 
@@ -467,7 +467,7 @@ def get_sub_gpulet_mesh_choices(
     min_gpulet_per_gpu = min(num_gpulets_per_gpu)
     total_num_gpulets = sum(num_gpulets_per_gpu)
 
-    submesh_choices = []
+    sub_gpulet_mesh_choices = []
 
 
     assert total_num_gpulets >= global_config.max_gpulets_per_submesh, (
@@ -475,9 +475,9 @@ def get_sub_gpulet_mesh_choices(
         "total number of gpulets.")
     i = 1
     while i <= global_config.max_gpulets_per_submesh:
-        submesh_choices.append((1, i))
+        sub_gpulet_mesh_choices.append((1, i))
         i *= 2
-    assert submesh_choices[-1][1] == global_config.max_gpulets_per_submesh, (
+    assert sub_gpulet_mesh_choices[-1][1] == global_config.max_gpulets_per_submesh, (
         "Only supports the cases where num_devices_per_host is power of two, "
         f"while now num_devices_per_host = {global_config.max_gpulets_per_submesh}")
 
@@ -509,7 +509,7 @@ def get_sub_gpulet_mesh_choices(
         raise ValueError(f"Invalid submesh space: {space}")
     """
 
-    return tuple(submesh_choices)
+    return tuple(sub_gpulet_mesh_choices)
 
 
 
@@ -528,6 +528,7 @@ def get_one_submesh_autosharding_config_choices(
     """
     results = []
     num_devices = virtual_submesh.num_devices
+    logger.info(f"num_devices = {num_devices}")
     if space in ["all", "single_node_model_parallel"]:
         if space == "all":
             max_mp_dimension = num_devices
@@ -584,6 +585,105 @@ def get_all_submesh_autosharding_config_choices(virtual_mesh, submesh_choices,
         configs += [None] * (max_num_autosharding_configs - len(configs))
 
     return autosharding_configs
+
+
+def get_one_gpulet_submesh_autosharding_config_choices(
+        gpulet_submesh: GPUletMesh, space: str, batch_size: int):
+    """
+    返回一个gpuletmesh对应的所有可能地逻辑形状以及自动分片配置的所有可能组合
+    
+    Which will be used by the auto stage construction algorithm.
+
+    Args:
+        gpulet_submesh: a submesh of GPUletMesh.
+        space: The search space of the logical mesh shapes.
+            possible choices: {"data_parallel_only",
+                               "single_node_model_parallel", "all"}.
+        batch_size: the batch size used.
+    """
+    results = []
+    num_gpulets = gpulet_submesh.num_gpulets
+    if space in ["all", "single_node_model_parallel"]:
+        '''if space == "all":
+            max_mp_dimension = num_gpulets
+        else:  # space == "single_node_model_parallel"
+            max_mp_dimension = virtual_submesh.num_devices_per_host'''
+        max_mp_dimension = num_gpulets
+
+        for mp_size in range(1, max_mp_dimension + 1):
+            if num_gpulets % mp_size == 0:
+                dp_size = num_gpulets // mp_size
+                if batch_size % dp_size == 0:
+                    results.append((gpulet_submesh.get_logical_gpulet_mesh(
+                        (dp_size, mp_size)), {
+                            "force_batch_dim_to_mesh_dim": 0
+                        }))
+        results.append((gpulet_submesh.get_logical_gpulet_mesh((num_gpulets, 1)), {}))
+    elif space == "data_parallel_only":
+        results.append((gpulet_submesh.get_logical_gpulet_mesh((num_gpulets, 1)), {
+            "force_batch_dim_to_mesh_dim": 0
+        }))
+    elif space == "model_parallel_only":
+        results.append((gpulet_submesh.get_logical_gpulet_mesh((1, num_gpulets)), {
+            "force_batch_dim_to_mesh_dim": 0
+        }))
+    else:
+        raise ValueError(f"Invalid space for get_one_submesh_autosharding"
+                         f"_config_choices: {space}")
+    return results
+
+
+
+def get_all_gpulet_submesh_autosharding_config_choices(
+        gpulet_mesh, gpulet_submesh_choices, space, batch_size):
+    """
+        对所有的sub_gpulet_mesh生成其对应的所有可能的autosharding_configs
+    """
+    # A config is: Tuple(logical_mesh_shape, autosharding_option_dict).
+    # Enumerate all (2D Mesh with force batch dim) + one (1D Mesh with mix batch
+    # dim).
+    gpulet_autosharding_configs = []
+    autosharding_configs = []
+    for sub_gpulet_mesh_choice in gpulet_submesh_choices:
+        #num_hosts, num_gpulets_per_host = sub_gpulet_mesh_choice
+        _, num_gpulets_per_submesh = sub_gpulet_mesh_choice
+        """gpulet_submesh = gpulet_mesh.slice_2d(
+            tuple(range(num_hosts)),
+            (tuple(range(num_gpulets_per_host)),) * num_hosts)"""
+        gpulet_submesh = gpulet_mesh.slice_1d(
+            gpulet_indices = tuple(range(num_gpulets_per_submesh)),
+        )
+        #logger.info(f"num_gpulets_per_submesh = {num_gpulets_per_submesh}")
+        virtual_mesh = gpulet_submesh.back_to_virtual_mesh()
+        print("virtual_mesh from gpulet_mesh")
+        virtual_mesh.print()
+        virtual_mesh_autosharding_configs = (
+            get_one_submesh_autosharding_config_choices(virtual_mesh, space,
+                                                        batch_size))
+        #print(virtual_mesh_autosharding_configs)
+        autosharding_configs.append(virtual_mesh_autosharding_configs)
+        gpulet_submesh_autosharding_configs = (
+            get_one_gpulet_submesh_autosharding_config_choices(gpulet_submesh, space,
+                                                        batch_size))
+        gpulet_autosharding_configs.append(gpulet_submesh_autosharding_configs)
+
+    # Pad all submesh to the maximum number of configs
+    max_num_autosharding_configs = max(
+        len(configs) for configs in gpulet_autosharding_configs)
+    for configs in gpulet_autosharding_configs:
+        configs += [None] * (max_num_autosharding_configs - len(configs))
+
+    max_num_autosharding_configs = max(
+        len(configs) for configs in autosharding_configs)
+    for configs in autosharding_configs:
+        configs += [None] * (max_num_autosharding_configs - len(configs))
+
+    return autosharding_configs
+    #return gpulet_autosharding_configs
+
+
+
+
 
 
 def get_sliced_virtual_submeshes(virtual_mesh, submesh_shapes):
@@ -687,21 +787,38 @@ def cluster_layers_and_slice_mesh(
 
 
         gpulet_mesh = None
+        gpulet_submesh_choices = None
+
+        submesh_choices = None
+
+        autosharding_configs = None
+
         if global_config.enable_gpulets:
             gpulet_mesh = virtual_mesh.get_gpulet_mesh()
-            
+            gpulet_submesh_choices = get_gpulet_submesh_choices(
+                gpulet_mesh.num_gpu,
+                gpulet_mesh.num_gpulets_per_gpu,
+                space=stage_option.submesh_physical_shape_space,
+            )
+            autosharding_configs = get_all_gpulet_submesh_autosharding_config_choices(
+                gpulet_mesh, gpulet_submesh_choices,
+                stage_option.submesh_logical_shape_space, batch_size
+            )
 
-        submesh_choices = get_submesh_choices(
-            virtual_mesh.num_hosts, virtual_mesh.num_devices_per_host,
-            stage_option.submesh_physical_shape_space,
-            stage_option.manually_specified_submeshes)
-        autosharding_configs = get_all_submesh_autosharding_config_choices(
-            virtual_mesh, submesh_choices,
-            stage_option.submesh_logical_shape_space, batch_size)
+        else:
+            submesh_choices = get_submesh_choices(
+                virtual_mesh.num_hosts, virtual_mesh.num_devices_per_host,
+                stage_option.submesh_physical_shape_space,
+                stage_option.manually_specified_submeshes)
+            autosharding_configs = get_all_submesh_autosharding_config_choices(
+                virtual_mesh, submesh_choices,
+                stage_option.submesh_logical_shape_space, batch_size)
+
         num_autosharding_configs = len(autosharding_configs[0])
 
         # Use DP to find the optimal solution.
         compute_cost, max_n_succ_stages = get_compute_cost(
+            gpulet_mesh, gpulet_submesh_choices,
             virtual_mesh, submesh_choices, autosharding_configs, layers,
             accumulator_mapping, acc_grad_invars, acc_grad_outvars,
             jax_apply_layers, apply_grad_global_info, num_micro_batches,

@@ -19,7 +19,8 @@ import ray
 from ray.exceptions import RayActorError
 from ray.util import ActorPool
 
-from alpa.device_mesh import (DistributedArray, PhysicalDeviceMesh,
+from alpa.device_mesh import (GPUletMesh,
+                              DistributedArray, PhysicalDeviceMesh,
                               VirtualPhysicalMesh, _shard_device_array,
                               get_global_cluster)
 from alpa.global_env import global_config
@@ -1125,9 +1126,20 @@ def distributed_profile_on_mesh(stages, meshes: Sequence[VirtualPhysicalMesh],
     # shape of compute_cost and max_n_succ_stages:
     # (num_layers, num_layers, num_autosharding_configs)
     timers("stage-construction-profiling").start()
+    """virtual_meshes = []
+    if global_config.enable_gpulets:
+        for mesh in meshes:
+            virtual_meshes.append(mesh.back_to_virtual_mesh())
+    else:
+        virtual_meshes = meshes
+    profile_results = profile_all(stages, compiled_outputs, virtual_meshes,
+                                  num_micro_batches, auto_stage_option,
+                                  profile_results)"""
     profile_results = profile_all(stages, compiled_outputs, meshes,
                                   num_micro_batches, auto_stage_option,
                                   profile_results)
+    
+    
     timers("stage-construction-profiling").stop()
     return profile_results
 
@@ -1164,6 +1176,8 @@ def _get_layer_flops_prefix_sum(layers):
 
 
 def get_compute_cost(
+        gpulet_mesh: GPUletMesh,
+        gpulet_submesh_choices: Sequence[Tuple[int]],
         virtual_mesh: VirtualPhysicalMesh,
         submesh_choices: Sequence[Tuple[int]],
         autosharding_configs: Sequence[Sequence[Tuple[LogicalDeviceMesh,
@@ -1217,129 +1231,327 @@ def get_compute_cost(
         max_n_succ_stages: The maximal number of succeeding stages. This
             is calculated based on memory constraints.
     """
-    cluster_size = virtual_mesh.num_devices
-    layer_flops_prefix_sum = _get_layer_flops_prefix_sum(layers)
-    if inference_mode:
-        num_layers = len(layers)
-    else:
-        assert len(layers) % 2 == 0
-        num_layers = len(layers) // 2
-    num_submesh_choices = len(submesh_choices)
-    num_autosharding_configs = len(autosharding_configs[0])
 
-    if auto_stage_option.cached_profile_result is not None:
-        with open(auto_stage_option.cached_profile_result, "rb") as f:
-            profile_results = pickle.load(f)
-    else:
-        profile_results = {}
-    print("-" * 20 + " Automatic stage clustering " + "-" * 20)
-    print(f"submesh_choices: {submesh_choices}")
-
-    # Reverse submesh_choices to test larger meshes first
-    for mesh_id, submesh in reversed(list(enumerate(submesh_choices))):
-        print(f"- Profiling for submesh {mesh_id} {submesh}:")
-        num_hosts, num_devices_per_host = submesh
-        tic = time()
-        if global_config.profile_with_whole_ray_cluster:
-            whole_cluster_virtual_mesh = get_global_cluster(
-            ).get_virtual_physical_mesh()
-            sliced_virtual_meshes = (
-                whole_cluster_virtual_mesh.slice_profiling_submeshes(
-                    num_hosts, num_devices_per_host))
+    if False:
+    #if global_config.enable_gpulets:
+        assert gpulet_mesh and gpulet_submesh_choices, ("'global_config.enable' is True \
+                                                        but 'gpulet_mesh' or 'gpulet_submesh_choices' is None.")
+        
+        cluster_size = gpulet_mesh.num_gpulets
+        layer_flops_prefix_sum = _get_layer_flops_prefix_sum(layers)
+        
+        
+        if inference_mode:
+            raise NotImplementedError("Inference mode is not supported for GPUlets now.")
+            # num_layers = len(layers)
         else:
-            sliced_virtual_meshes = virtual_mesh.slice_profiling_submeshes(
-                num_hosts, num_devices_per_host)
+            assert len(layers) % 2 == 0
+            num_layers = len(layers) // 2
+        num_submesh_choices = len(gpulet_submesh_choices)
+        num_autosharding_configs = len(autosharding_configs[0])
+
+        if auto_stage_option.cached_profile_result is not None:
+            with open(auto_stage_option.cached_profile_result, "rb") as f:
+                profile_results = pickle.load(f)
+        else:
+            profile_results = {}
+        print("-" * 20 + " Automatic stage clustering " + "-" * 20)
+        print(f"gpulet_submesh_choices: {gpulet_submesh_choices}")
+
+        
+        # Reverse submesh_choices to test larger meshes first
+        for mesh_id, gpulet_submesh in reversed(list(enumerate(gpulet_submesh_choices))):
+            print(f"- Profiling for submesh {mesh_id} {gpulet_submesh}:")
+            _, num_gpulets_per_submesh = gpulet_submesh
+            tic = time()
+
+            gpulet_sliced_meshes = gpulet_mesh.slice_profiling_gpulet_submeshes(
+                num_gpulets_per_submesh=num_gpulets_per_submesh,
+            )
+
+            if auto_stage_option.layer_profile_mode == "composition":
+                if inference_mode:
+                    raise NotImplementedError("Inference mode is not supported for GPUlets now.")
+                else:
+                    stages = generate_training_stages_2d(
+                        layers, layer_flops_prefix_sum, accumulator_mapping,
+                        acc_grad_invars, acc_grad_outvars, apply_grad_layers,
+                        apply_grad_global_info, mesh_id,
+                        autosharding_configs[mesh_id],
+                        gpulet_sliced_meshes[0].num_gpulets, cluster_size,
+                        auto_stage_option.stage_imbalance_tolerance)
+            elif auto_stage_option.layer_profile_mode == "individual":
+                raise NotImplementedError("Individual layer profiling is not supported for GPUlets now.")
+            else:
+                raise ValueError(f"Unknown layer profile mode: "
+                                f"{auto_stage_option.layer_profile_mode}")
+
+            print(f"profile_results before check: {profile_results}")
+            check_profile_results_consistent(stages, profile_results)
+
+            print("get_compute_cost() in stage_profiling.py:")
+            print(f"==auto_sharding_configs:")
+            for config in autosharding_configs[mesh_id]:
+                print(f"config: {config}")
+            print(f"==stages to profile:")
+            for stage_indice, _, _ in stages:
+                print(f"stage_idx: {stage_indice}")
+            print(f"==sliced_virtual_meshes:")
+            for i, mesh in enumerate(gpulet_sliced_meshes):
+                print(f"gpulet_sliced_mesh {i}: gpu_ids->{mesh.gpu_ids}\n \
+                        num_gpulets_per_gpu->{mesh.num_gpulets_per_gpu}\n  num_gpulets->{mesh.num_gpulets}")
+                
+
+            profile_results = distributed_profile_on_mesh(
+                stages, gpulet_sliced_meshes, num_micro_batches, default_as_option,
+                auto_stage_option, profile_results)
+
+            toc = time()
+            print(f"Profiling for submesh {mesh_id} {gpulet_submesh} takes {toc - tic:.2f}"
+                f" seconds")
+            print("-" * 50)
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        profile_result_file_name = (f"profile-results-{timestamp}.npy")
+        np.save(profile_result_file_name, profile_results)
+        global last_compute_cost_file_name
+        last_compute_cost_file_name = profile_result_file_name
+        print(f"Profile result saved to: {profile_result_file_name}")
+        print("-" * 70)
 
         if auto_stage_option.layer_profile_mode == "composition":
             if inference_mode:
-                stages = generate_inference_stages_2d(
-                    layers, layer_flops_prefix_sum, accumulator_mapping,
-                    acc_grad_invars, acc_grad_outvars, apply_grad_layers,
-                    apply_grad_global_info, mesh_id,
-                    autosharding_configs[mesh_id],
-                    sliced_virtual_meshes[0].num_devices, cluster_size,
-                    auto_stage_option.stage_imbalance_tolerance)
+                compute_cost, _ = interpret_profile_result_inference_2d(
+                    profile_results, num_layers, num_submesh_choices,
+                    num_autosharding_configs)
+                max_n_succ_stages = None
             else:
-                stages = generate_training_stages_2d(
-                    layers, layer_flops_prefix_sum, accumulator_mapping,
-                    acc_grad_invars, acc_grad_outvars, apply_grad_layers,
-                    apply_grad_global_info, mesh_id,
-                    autosharding_configs[mesh_id],
-                    sliced_virtual_meshes[0].num_devices, cluster_size,
-                    auto_stage_option.stage_imbalance_tolerance)
+                (compute_cost,
+                max_n_succ_stages) = interpret_profile_result_training_2d(
+                    profile_results, num_layers, num_submesh_choices,
+                    num_autosharding_configs)
         elif auto_stage_option.layer_profile_mode == "individual":
             if inference_mode:
-                stages = generate_inference_stages_1d(
-                    layers, accumulator_mapping, acc_grad_invars,
-                    acc_grad_outvars, apply_grad_layers, apply_grad_global_info,
-                    mesh_id, autosharding_configs[mesh_id])
+                compute_cost, _ = interpret_profile_result_inference_1d(
+                    profile_results, num_layers, num_submesh_choices,
+                    num_autosharding_configs)
+                max_n_succ_stages = None
             else:
-                stages = generate_training_stages_1d(
-                    layers, accumulator_mapping, acc_grad_invars,
-                    acc_grad_outvars, apply_grad_layers, apply_grad_global_info,
-                    mesh_id, autosharding_configs[mesh_id])
+                (compute_cost,
+                max_n_succ_stages) = interpret_profile_result_training_1d(
+                    profile_results, num_layers, num_submesh_choices,
+                    num_autosharding_configs)
         else:
             raise ValueError(f"Unknown layer profile mode: "
-                             f"{auto_stage_option.layer_profile_mode}")
-
-        print(f"profile_results before check: {profile_results}")
-        check_profile_results_consistent(stages, profile_results)
-
-        print("get_compute_cost() in stage_profiling.py:")
-        print(f"==auto_sharding_configs:")
-        for config in autosharding_configs[mesh_id]:
-            print(f"config: {config}")
-        print(f"==stages to profile:")
-        for stage_indice, _, _ in stages:
-            print(f"stage_idx: {stage_indice}")
-        print(f"==sliced_virtual_meshes:")
-        for i, mesh in enumerate(sliced_virtual_meshes):
-            print(f"sliced_virtual_mesh {i}: host_ids->{mesh.host_ids} \
-                    num_devices_per_host->{mesh.num_devices_per_host}  devices->{mesh.devices}")
-            
-
-        profile_results = distributed_profile_on_mesh(
-            stages, sliced_virtual_meshes, num_micro_batches, default_as_option,
-            auto_stage_option, profile_results)
-
-        toc = time()
-        print(f"Profiling for submesh {mesh_id} {submesh} takes {toc - tic:.2f}"
-              f" seconds")
-        print("-" * 50)
-
-    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    profile_result_file_name = (f"profile-results-{timestamp}.npy")
-    np.save(profile_result_file_name, profile_results)
-    global last_compute_cost_file_name
-    last_compute_cost_file_name = profile_result_file_name
-    print(f"Profile result saved to: {profile_result_file_name}")
-    print("-" * 70)
-
-    if auto_stage_option.layer_profile_mode == "composition":
+                            f"{auto_stage_option.layer_profile_mode}")
+    """
+    elif global_config.enable_gpulets:
+        assert gpulet_mesh and gpulet_submesh_choices, ("'global_config.enable' is True \
+                                                        but 'gpulet_mesh' or 'gpulet_submesh_choices' is None.")
+        
+        #cluster_size = gpulet_mesh.num_gpulets
+        cluster_size = virtual_mesh.num_devices
+        layer_flops_prefix_sum = _get_layer_flops_prefix_sum(layers)
+        
+        
         if inference_mode:
-            compute_cost, _ = interpret_profile_result_inference_2d(
-                profile_results, num_layers, num_submesh_choices,
-                num_autosharding_configs)
-            max_n_succ_stages = None
+            raise NotImplementedError("Inference mode is not supported for GPUlets now.")
+            # num_layers = len(layers)
         else:
-            (compute_cost,
-             max_n_succ_stages) = interpret_profile_result_training_2d(
-                 profile_results, num_layers, num_submesh_choices,
-                 num_autosharding_configs)
-    elif auto_stage_option.layer_profile_mode == "individual":
-        if inference_mode:
-            compute_cost, _ = interpret_profile_result_inference_1d(
-                profile_results, num_layers, num_submesh_choices,
-                num_autosharding_configs)
-            max_n_succ_stages = None
+            assert len(layers) % 2 == 0
+            num_layers = len(layers) // 2
+        num_submesh_choices = len(gpulet_submesh_choices)
+        num_autosharding_configs = len(autosharding_configs[0])
+
+        if auto_stage_option.cached_profile_result is not None:
+            with open(auto_stage_option.cached_profile_result, "rb") as f:
+                profile_results = pickle.load(f)
         else:
-            (compute_cost,
-             max_n_succ_stages) = interpret_profile_result_training_1d(
-                 profile_results, num_layers, num_submesh_choices,
-                 num_autosharding_configs)
+            profile_results = {}
+        print("-" * 20 + " Automatic stage clustering " + "-" * 20)
+        print(f"gpulet_submesh_choices: {gpulet_submesh_choices}")
+
+        
+        # Reverse submesh_choices to test larger meshes first
+        for mesh_id, gpulet_submesh in reversed(list(enumerate(gpulet_submesh_choices))):
+            print(f"- Profiling for submesh {mesh_id} {gpulet_submesh}:")
+            _, num_gpulets_per_submesh = gpulet_submesh
+            tic = time()
+
+            gpulet_sliced_meshes = gpulet_mesh.slice_profiling_gpulet_submeshes(
+                num_gpulets_per_submesh=num_gpulets_per_submesh,
+            )
+
+            sliced_virtual_meshes = [gpulet_mesh.back_to_virtual_mesh() for gpulet_mesh in gpulet_sliced_meshes]
+
+
+            if auto_stage_option.layer_profile_mode == "composition":
+                if inference_mode:
+                    raise NotImplementedError("Inference mode is not supported for GPUlets now.")
+                else:
+                    stages = generate_training_stages_2d(
+                        layers, layer_flops_prefix_sum, accumulator_mapping,
+                        acc_grad_invars, acc_grad_outvars, apply_grad_layers,
+                        apply_grad_global_info, mesh_id,
+                        autosharding_configs[mesh_id],
+                        sliced_virtual_meshes[0].num_devices, cluster_size,
+                        auto_stage_option.stage_imbalance_tolerance)
+            elif auto_stage_option.layer_profile_mode == "individual":
+                raise NotImplementedError("Individual layer profiling is not supported for GPUlets now.")
+            else:
+                raise ValueError(f"Unknown layer profile mode: "
+                                f"{auto_stage_option.layer_profile_mode}")
+
+            print(f"profile_results before check: {profile_results}")
+            check_profile_results_consistent(stages, profile_results)
+
+            print("get_compute_cost() in stage_profiling.py:")
+            print(f"==auto_sharding_configs:")
+            for config in autosharding_configs[mesh_id]:
+                print(f"config: {config}")
+            print(f"==stages to profile:")
+            for stage_indice, _, _ in stages:
+                print(f"stage_idx: {stage_indice}")
+            print(f"==sliced_virtual_meshes:")
+            for i, mesh in enumerate(sliced_virtual_meshes):
+                print(f"sliced_virtual_mesh {i}: host_ids->{mesh.host_ids} \
+                        num_devices_per_host->{mesh.num_devices_per_host}  devices->{mesh.devices}")
+                
+
+            profile_results = distributed_profile_on_mesh(
+                stages, sliced_virtual_meshes, num_micro_batches, default_as_option,
+                auto_stage_option, profile_results)
+
+            toc = time()
+            print(f"Profiling for submesh {mesh_id} {gpulet_submesh} takes {toc - tic:.2f}"
+                f" seconds")
+            print("-" * 50)
     else:
-        raise ValueError(f"Unknown layer profile mode: "
-                         f"{auto_stage_option.layer_profile_mode}")
+        assert virtual_mesh and submesh_choices, ("'global_config.enable' is False \
+                                            but 'virtual_mesh' or 'submesh_choices' is None.")
+        cluster_size = virtual_mesh.num_devices
+        layer_flops_prefix_sum = _get_layer_flops_prefix_sum(layers)
+        if inference_mode:
+            num_layers = len(layers)
+        else:
+            assert len(layers) % 2 == 0
+            num_layers = len(layers) // 2
+        num_submesh_choices = len(submesh_choices)
+        num_autosharding_configs = len(autosharding_configs[0])
+
+        if auto_stage_option.cached_profile_result is not None:
+            with open(auto_stage_option.cached_profile_result, "rb") as f:
+                profile_results = pickle.load(f)
+        else:
+            profile_results = {}
+        print("-" * 20 + " Automatic stage clustering " + "-" * 20)
+        print(f"submesh_choices: {submesh_choices}")
+
+        # Reverse submesh_choices to test larger meshes first
+        for mesh_id, submesh in reversed(list(enumerate(submesh_choices))):
+            print(f"- Profiling for submesh {mesh_id} {submesh}:")
+            num_hosts, num_devices_per_host = submesh
+            tic = time()
+            if global_config.profile_with_whole_ray_cluster:
+                whole_cluster_virtual_mesh = get_global_cluster(
+                ).get_virtual_physical_mesh()
+                sliced_virtual_meshes = (
+                    whole_cluster_virtual_mesh.slice_profiling_submeshes(
+                        num_hosts, num_devices_per_host))
+            else:
+                sliced_virtual_meshes = virtual_mesh.slice_profiling_submeshes(
+                    num_hosts, num_devices_per_host)
+
+            if auto_stage_option.layer_profile_mode == "composition":
+                if inference_mode:
+                    stages = generate_inference_stages_2d(
+                        layers, layer_flops_prefix_sum, accumulator_mapping,
+                        acc_grad_invars, acc_grad_outvars, apply_grad_layers,
+                        apply_grad_global_info, mesh_id,
+                        autosharding_configs[mesh_id],
+                        sliced_virtual_meshes[0].num_devices, cluster_size,
+                        auto_stage_option.stage_imbalance_tolerance)
+                else:
+                    stages = generate_training_stages_2d(
+                        layers, layer_flops_prefix_sum, accumulator_mapping,
+                        acc_grad_invars, acc_grad_outvars, apply_grad_layers,
+                        apply_grad_global_info, mesh_id,
+                        autosharding_configs[mesh_id],
+                        sliced_virtual_meshes[0].num_devices, cluster_size,
+                        auto_stage_option.stage_imbalance_tolerance)
+            elif auto_stage_option.layer_profile_mode == "individual":
+                if inference_mode:
+                    stages = generate_inference_stages_1d(
+                        layers, accumulator_mapping, acc_grad_invars,
+                        acc_grad_outvars, apply_grad_layers, apply_grad_global_info,
+                        mesh_id, autosharding_configs[mesh_id])
+                else:
+                    stages = generate_training_stages_1d(
+                        layers, accumulator_mapping, acc_grad_invars,
+                        acc_grad_outvars, apply_grad_layers, apply_grad_global_info,
+                        mesh_id, autosharding_configs[mesh_id])
+            else:
+                raise ValueError(f"Unknown layer profile mode: "
+                                f"{auto_stage_option.layer_profile_mode}")
+
+            print(f"profile_results before check: {profile_results}")
+            check_profile_results_consistent(stages, profile_results)
+
+            print("get_compute_cost() in stage_profiling.py:")
+            print(f"==auto_sharding_configs:")
+            for config in autosharding_configs[mesh_id]:
+                print(f"config: {config}")
+            print(f"==stages to profile:")
+            for stage_indice, _, _ in stages:
+                print(f"stage_idx: {stage_indice}")
+            print(f"==sliced_virtual_meshes:")
+            for i, mesh in enumerate(sliced_virtual_meshes):
+                print(f"sliced_virtual_mesh {i}: host_ids->{mesh.host_ids} \
+                        num_devices_per_host->{mesh.num_devices_per_host}  devices->{mesh.devices}")
+                
+
+            profile_results = distributed_profile_on_mesh(
+                stages, sliced_virtual_meshes, num_micro_batches, default_as_option,
+                auto_stage_option, profile_results)
+
+            toc = time()
+            print(f"Profiling for submesh {mesh_id} {submesh} takes {toc - tic:.2f}"
+                f" seconds")
+            print("-" * 50)
+
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        profile_result_file_name = (f"profile-results-{timestamp}.npy")
+        np.save(profile_result_file_name, profile_results)
+        global last_compute_cost_file_name
+        last_compute_cost_file_name = profile_result_file_name
+        print(f"Profile result saved to: {profile_result_file_name}")
+        print("-" * 70)
+
+        if auto_stage_option.layer_profile_mode == "composition":
+            if inference_mode:
+                compute_cost, _ = interpret_profile_result_inference_2d(
+                    profile_results, num_layers, num_submesh_choices,
+                    num_autosharding_configs)
+                max_n_succ_stages = None
+            else:
+                (compute_cost,
+                max_n_succ_stages) = interpret_profile_result_training_2d(
+                    profile_results, num_layers, num_submesh_choices,
+                    num_autosharding_configs)
+        elif auto_stage_option.layer_profile_mode == "individual":
+            if inference_mode:
+                compute_cost, _ = interpret_profile_result_inference_1d(
+                    profile_results, num_layers, num_submesh_choices,
+                    num_autosharding_configs)
+                max_n_succ_stages = None
+            else:
+                (compute_cost,
+                max_n_succ_stages) = interpret_profile_result_training_1d(
+                    profile_results, num_layers, num_submesh_choices,
+                    num_autosharding_configs)
+        else:
+            raise ValueError(f"Unknown layer profile mode: "
+                            f"{auto_stage_option.layer_profile_mode}")
 
     return compute_cost, max_n_succ_stages
 
