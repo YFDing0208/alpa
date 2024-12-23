@@ -1729,7 +1729,7 @@ def get_gpu_info():
     try:
         # 获取 GPU 型号、内存大小、UUID和计算能力
         result = subprocess.run(
-            ["nvidia-smi", "--query-gpu=name,memory.total,uuid,compute_cap", "--format=csv,noheader,nounits"],
+            ["nvidia-smi", "--query-gpu=name,memory.total,uuid", "--format=csv,noheader,nounits"],
             capture_output=True,
             text=True,
             check=True
@@ -1739,8 +1739,8 @@ def get_gpu_info():
         gpu_info = result.stdout.strip().split('\n')
         gpu_details = []
         for info in gpu_info:
-            name, memory, uuid, capability = info.split(', ')
-            gpu_details.append((name, memory, uuid, capability))
+            name, memory, uuid = info.split(', ')
+            gpu_details.append((name, memory, uuid))
         return gpu_details
     except subprocess.CalledProcessError:
         return ["No GPU or nvidia-smi error"]
@@ -1752,7 +1752,7 @@ class GPUInfoActor:
         try:
             # 获取 GPU 型号、内存大小、UUID 和计算能力
             result = subprocess.run(
-                ["nvidia-smi", "--query-gpu=name,memory.total,uuid,compute_cap", "--format=csv,noheader,nounits"],
+                ["nvidia-smi", "--query-gpu=name,memory.total,uuid", "--format=csv,noheader,nounits"],
                 capture_output=True,
                 text=True,
                 check=True
@@ -1762,8 +1762,8 @@ class GPUInfoActor:
             gpu_info = result.stdout.strip().split('\n')
             gpu_details = []
             for info in gpu_info:
-                name, memory, uuid, capability = info.split(', ')
-                gpu_details.append((name, memory, uuid, capability))
+                name, memory, uuid = info.split(', ')
+                gpu_details.append((name, memory, uuid))
             return gpu_details
         except subprocess.CalledProcessError:
             return ["No GPU or nvidia-smi error"]

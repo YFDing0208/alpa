@@ -95,18 +95,24 @@ ReshardingBroadcastTask = namedtuple("ReshardingBroadcastTask",
 ComputeCapacityTable = {
     "NVIDIA GeForce RTX 3090": 35.6,
     "Tesla V100-SXM2-32GB": 15.7,
+    "NVIDIA A16": 99.9,
+    "Tesla P100-SXM2-16GB": 99.9,
 }
 
 # The value is the memory bandwidth (GB/s)'.
 MemoryBandwidthTable = {
     "NVIDIA GeForce RTX 3090": 936,
     "Tesla V100-SXM2-32GB": 900,
+    "NVIDIA A16": 99.9,
+    "Tesla P100-SXM2-16GB": 99.9,
 }
 
 # The value is the interconnect bandwidth within a node (GB/s)'.
 InterconnectBandwidthTable = {
     "NVIDIA GeForce RTX 3090": 7.41,
     "Tesla V100-SXM2-32GB": 300,
+    "NVIDIA A16": 99.9,
+    "Tesla P100-SXM2-16GB": 99.9,
 }
 
 
@@ -2596,7 +2602,7 @@ class DeviceCluster:
                 # get the GPU information from each node
                 actor = GPUInfoActor.options(num_cpus=1, resources={f"node:{node['NodeManagerAddress']}": 0.01}).remote()
                 node_gpu_info = ray.get(actor.get_gpu_info.remote())
-                for gpu_name, memory, uuid, capability  in node_gpu_info:
+                for gpu_name, memory, uuid in node_gpu_info:
                     gpu = PhysicalGPU(gpu_name, uuid, memory, node['NodeID'])
                     gpus.append(gpu)
                     devices.append(gpu.gpu_id)
