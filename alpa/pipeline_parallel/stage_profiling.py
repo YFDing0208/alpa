@@ -1519,39 +1519,42 @@ def get_compute_cost(
                 f" seconds")
             print("-" * 50)
 
-        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        profile_result_file_name = (f"profile-results-{timestamp}.npy")
-        np.save(profile_result_file_name, profile_results)
-        global last_compute_cost_file_name
-        last_compute_cost_file_name = profile_result_file_name
-        print(f"Profile result saved to: {profile_result_file_name}")
-        print("-" * 70)
+#### 接下来的内容一直到函数返回值本来属于不开启gpulet时的
+# 用于存在全局变量的声明，所以将这一部分向前缩进一层
+# 将其作为开启和未开启gpulet时的统一代码
+    timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    profile_result_file_name = (f"profile-results-{timestamp}.npy")
+    np.save(profile_result_file_name, profile_results)
+    global last_compute_cost_file_name
+    last_compute_cost_file_name = profile_result_file_name
+    print(f"Profile result saved to: {profile_result_file_name}")
+    print("-" * 70)
 
-        if auto_stage_option.layer_profile_mode == "composition":
-            if inference_mode:
-                compute_cost, _ = interpret_profile_result_inference_2d(
-                    profile_results, num_layers, num_submesh_choices,
-                    num_autosharding_configs)
-                max_n_succ_stages = None
-            else:
-                (compute_cost,
-                max_n_succ_stages) = interpret_profile_result_training_2d(
-                    profile_results, num_layers, num_submesh_choices,
-                    num_autosharding_configs)
-        elif auto_stage_option.layer_profile_mode == "individual":
-            if inference_mode:
-                compute_cost, _ = interpret_profile_result_inference_1d(
-                    profile_results, num_layers, num_submesh_choices,
-                    num_autosharding_configs)
-                max_n_succ_stages = None
-            else:
-                (compute_cost,
-                max_n_succ_stages) = interpret_profile_result_training_1d(
-                    profile_results, num_layers, num_submesh_choices,
-                    num_autosharding_configs)
+    if auto_stage_option.layer_profile_mode == "composition":
+        if inference_mode:
+            compute_cost, _ = interpret_profile_result_inference_2d(
+                profile_results, num_layers, num_submesh_choices,
+                num_autosharding_configs)
+            max_n_succ_stages = None
         else:
-            raise ValueError(f"Unknown layer profile mode: "
-                            f"{auto_stage_option.layer_profile_mode}")
+            (compute_cost,
+            max_n_succ_stages) = interpret_profile_result_training_2d(
+                profile_results, num_layers, num_submesh_choices,
+                num_autosharding_configs)
+    elif auto_stage_option.layer_profile_mode == "individual":
+        if inference_mode:
+            compute_cost, _ = interpret_profile_result_inference_1d(
+                profile_results, num_layers, num_submesh_choices,
+                num_autosharding_configs)
+            max_n_succ_stages = None
+        else:
+            (compute_cost,
+            max_n_succ_stages) = interpret_profile_result_training_1d(
+                profile_results, num_layers, num_submesh_choices,
+                num_autosharding_configs)
+    else:
+        raise ValueError(f"Unknown layer profile mode: "
+                        f"{auto_stage_option.layer_profile_mode}")
 
     return compute_cost, max_n_succ_stages
 
